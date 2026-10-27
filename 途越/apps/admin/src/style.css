@@ -1,0 +1,41 @@
+:root {
+  font-family: Inter, 'Microsoft YaHei', sans-serif;
+  color: #1f2937;
+  background: #f5f7fa;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+.shell {
+  min-height: 100vh;
+}
+.el-aside {
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
+}
+.el-aside h2 {
+  padding: 16px 20px;
+}
+.el-header {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+.login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+.login .el-card {
+  width: min(420px, 90vw);
+}
+section {
+  max-width: 960px;
+}
+h1 {
+  margin-top: 0;
+}
