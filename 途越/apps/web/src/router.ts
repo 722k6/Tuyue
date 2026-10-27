@@ -10,7 +10,15 @@ export const router = createRouter({
     { path: '/', component: HomePage },
     { path: '/cars', component: CarsPage },
     { path: '/cars/:id', component: CarDetailPage },
-    { path: '/ai', component: PlaceholderPage, props: { title: 'AI 选车', description: 'AI 责任线入口占位。' } },
-    { path: '/compare', component: PlaceholderPage, props: { title: '车型对比', description: '购车决策责任线入口占位。' } },
+    {
+      path: '/ai',
+      component: PlaceholderPage,
+      props: { title: 'AI 选车', description: 'AI 责任线入口占位。' },
+    },
+    {
+      path: '/compare',
+      component: PlaceholderPage,
+      props: { title: '车型对比', description: '购车决策责任线入口占位。' },
+    },
   ],
 });

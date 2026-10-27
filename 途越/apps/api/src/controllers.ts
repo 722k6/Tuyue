@@ -1,9 +1,13 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post } from '@nestjs/common';
 import {
-  AdminRole,
-  type AuthResponse,
-  type MockLoginRequest,
-} from '@tuyue/contracts';
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+} from '@nestjs/common';
+import { AdminRole, type AuthResponse, type MockLoginRequest } from '@tuyue/contracts';
 import { findMockAdmin, mockActivities, mockCars, mockDealers } from '@tuyue/test-utils';
 
 @Controller('health')

@@ -11,7 +11,9 @@ export const useAdminHealthStore = defineStore('admin-health', () => {
       const response = await getHealth();
       status.value = response.data.status;
       requestId.value = response.requestId;
-    } catch { status.value = 'error'; }
+    } catch {
+      status.value = 'error';
+    }
   }
   return { status, requestId, check };
 });

@@ -28,27 +28,32 @@
 ---
 
 ### Task 1: Workspace、共享契约与 Mock 数据
+
 - [ ] 建立根 workspace 与质量配置。
 - [ ] 先写 contracts/test-utils 失败测试并运行 RED。
 - [ ] 实现共享类型与集中 Mock 数据并运行 GREEN。
 - [ ] 验证并提交。
 
 ### Task 2: NestJS Mock API 与 OpenAPI
+
 - [ ] 先写健康、车型、错误、登录接口测试并运行 RED。
 - [ ] 实现控制器、中间件、拦截器、异常过滤器和 Swagger。
 - [ ] 运行单元/接口测试并提交。
 
 ### Task 3: Web 应用
+
 - [ ] 先写共享类型与健康状态 Store 测试并运行 RED。
 - [ ] 实现路由、占位页面、Pinia 和 Mock API 调用。
 - [ ] 验证测试、类型和构建并提交。
 
 ### Task 4: Admin 应用
+
 - [ ] 先写共享角色与健康状态 Store 测试并运行 RED。
 - [ ] 实现 Element Plus、路由元数据、CMS 布局和占位页面。
 - [ ] 验证测试、类型和构建并提交。
 
 ### Task 5: CI、文档与最终验证
+
 - [ ] 建立 GitHub Actions、README、接口契约文档和 smoke 测试。
 - [ ] 运行 lint、typecheck、test、test:e2e、build。
 - [ ] 检查密钥、Git diff 和启动探针，修复全部失败。

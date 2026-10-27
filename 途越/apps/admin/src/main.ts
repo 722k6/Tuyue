@@ -24,7 +24,20 @@ import './style.css';
 
 const app = createApp(App).use(createPinia()).use(router);
 [
-  ElAlert, ElAside, ElButton, ElCard, ElContainer, ElEmpty, ElForm, ElFormItem,
-  ElHeader, ElInput, ElMain, ElMenu, ElMenuItem, ElOption, ElSelect,
+  ElAlert,
+  ElAside,
+  ElButton,
+  ElCard,
+  ElContainer,
+  ElEmpty,
+  ElForm,
+  ElFormItem,
+  ElHeader,
+  ElInput,
+  ElMain,
+  ElMenu,
+  ElMenuItem,
+  ElOption,
+  ElSelect,
 ].forEach((component) => app.component(component.name!, component));
 app.mount('#app');

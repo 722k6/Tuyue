@@ -84,13 +84,12 @@ export const AdminRole = {
 } as const;
 export type AdminRole = (typeof AdminRole)[keyof typeof AdminRole];
 
-export type PermissionCode =
-  | 'content:edit'
-  | 'content:review'
-  | 'content:publish'
-  | 'admin:manage';
+export type PermissionCode = 'content:edit' | 'content:review' | 'content:publish' | 'admin:manage';
 
-export interface MockLoginRequest { username: string; role?: AdminRole }
+export interface MockLoginRequest {
+  username: string;
+  role?: AdminRole;
+}
 export interface AuthUser {
   id: string;
   username: string;
@@ -98,9 +97,16 @@ export interface AuthUser {
   role: AdminRole;
   permissions: PermissionCode[];
 }
-export interface AuthResponse { accessToken: string; user: AuthUser; expiresAt: string }
+export interface AuthResponse {
+  accessToken: string;
+  user: AuthUser;
+  expiresAt: string;
+}
 
-export interface AiChatRequest { message: string; conversationId?: string }
+export interface AiChatRequest {
+  message: string;
+  conversationId?: string;
+}
 export type AiStreamEvent =
   | { type: 'message'; content: string }
   | { type: 'recommendation'; recommendation: AiRecommendation }
@@ -113,14 +119,20 @@ export interface AiRecommendation {
   missingConditions: string[];
 }
 
-export interface CompareItem { carId: string; addedAt: string }
+export interface CompareItem {
+  carId: string;
+  addedAt: string;
+}
 export interface CompareParameterRow {
   code: string;
   label: string;
   valuesByCarId: Record<string, string | null>;
   different: boolean;
 }
-export interface ConfigurationSelection { carId: string; optionIds: string[] }
+export interface ConfigurationSelection {
+  carId: string;
+  optionIds: string[];
+}
 export interface QuoteResult {
   carId: string;
   basePriceCents: number;

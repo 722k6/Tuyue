@@ -9,7 +9,11 @@ import {
 
 describe('shared contracts', () => {
   it('exposes stable enum values used across applications', () => {
-    expect(AdminRole).toEqual({ EDITOR: 'editor', REVIEWER: 'reviewer', SUPER_ADMIN: 'super_admin' });
+    expect(AdminRole).toEqual({
+      EDITOR: 'editor',
+      REVIEWER: 'reviewer',
+      SUPER_ADMIN: 'super_admin',
+    });
     expect(Object.values(EnergyType)).toContain('electric');
     expect(PublishStatus.PUBLISHED).toBe('published');
   });

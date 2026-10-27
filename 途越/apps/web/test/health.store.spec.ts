@@ -9,10 +9,13 @@ describe('web health store', () => {
   it('reads shared CarSummary and reports API health', async () => {
     const typedCar: Pick<CarSummary, 'id' | 'name'> = { id: 'ty-suv-001', name: '途越远行' };
     expect(typedCar.id).toBe('ty-suv-001');
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true, data: { status: 'ok' }, requestId: 'req-web' }),
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, data: { status: 'ok' }, requestId: 'req-web' }),
+      }),
+    );
 
     const store = useHealthStore();
     await store.check();

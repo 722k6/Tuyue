@@ -9,7 +9,13 @@ import {
 } from './controllers.js';
 
 @Module({
-  controllers: [HealthController, CarsController, AuthController, ActivitiesController, DealersController],
+  controllers: [
+    HealthController,
+    CarsController,
+    AuthController,
+    ActivitiesController,
+    DealersController,
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
