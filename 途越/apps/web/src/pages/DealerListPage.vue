@@ -43,6 +43,7 @@ onBeforeUnmount(() => {
           v-for="item in dealer.items"
           :key="item.id"
           class="dealer-card"
+          :data-dealer-id="item.id"
           :data-selected="item.id === dealer.selectedId"
           @click="dealer.select(item.id)"
         >

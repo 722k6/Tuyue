@@ -22,7 +22,12 @@ function formatRange(startsAt: string, endsAt: string): string {
     <p v-if="activity.status === 'loading'">加载中…</p>
     <p v-else-if="activity.status === 'error'">活动加载失败，请稍后重试。</p>
     <ul v-else class="activity-list">
-      <li v-for="item in activity.items" :key="item.id" class="activity-card">
+      <li
+        v-for="item in activity.items"
+        :key="item.id"
+        class="activity-card"
+        :data-activity-id="item.id"
+      >
         <h2>{{ item.name }}</h2>
         <p class="activity-card__range">{{ formatRange(item.startsAt, item.endsAt) }}</p>
         <p>{{ item.summary }}</p>
