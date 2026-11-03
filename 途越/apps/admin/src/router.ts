@@ -4,6 +4,7 @@ import CmsLayout from './layouts/CmsLayout.vue';
 import DashboardPage from './pages/DashboardPage.vue';
 import LoginPage from './pages/LoginPage.vue';
 import ModulePage from './pages/ModulePage.vue';
+import CarsPage from './pages/cars/CarsPage.vue';
 
 const allRoles = Object.values(AdminRole);
 export const router = createRouter({
@@ -17,7 +18,7 @@ export const router = createRouter({
       meta: { requiresAuth: true, roles: allRoles },
       children: [
         { path: 'dashboard', component: DashboardPage },
-        { path: 'cars', component: ModulePage, props: { title: '车型管理', owner: 'CMS 责任线' } },
+        { path: 'cars', component: CarsPage },
         {
           path: 'activities',
           component: ModulePage,
