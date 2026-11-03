@@ -69,12 +69,117 @@ export interface CarSummary {
   publishStatus: PublishStatus;
 }
 
+export interface CarImage {
+  id: string;
+  url: string;
+  isCover: boolean;
+}
+
 export interface CarDetail extends CarSummary {
   galleryUrls: string[];
+  images: CarImage[];
   description: string;
   parameters: CarParameter[];
   configOptions: CarConfigOption[];
   updatedAt: string;
+}
+
+export const CAR_LIMITS = {
+  name: { min: 2, max: 20 },
+  series: { min: 2, max: 20 },
+  tagline: { min: 4, max: 30 },
+  description: { min: 10, max: 500 },
+  priceCents: { min: 0, max: 100_000_000 },
+  images: { max: 9 },
+  imageBytes: 5 * 1024 * 1024,
+} as const;
+
+export const CAR_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+
+export interface CarDraftInput {
+  name: string;
+  series: string;
+  energyType: EnergyType;
+  tagline: string;
+  description: string;
+  priceMinCents: number;
+  priceMaxCents: number;
+  publishStatus: PublishStatus;
+}
+
+export interface CarImageInput {
+  id?: string;
+  url: string;
+  isCover: boolean;
+}
+
+export interface CarFieldError {
+  field: string;
+  message: string;
+}
+
+function checkText(
+  field: string,
+  label: string,
+  value: string,
+  limit: { min: number; max: number },
+): CarFieldError[] {
+  const text = value.trim();
+  if (!text) return [{ field, message: `${label}不能为空` }];
+  if (text.length < limit.min || text.length > limit.max) {
+    return [{ field, message: `${label}长度需为 ${limit.min}-${limit.max} 个字符` }];
+  }
+  return [];
+}
+
+export function validateCarDraft(input: CarDraftInput): CarFieldError[] {
+  const errors: CarFieldError[] = [
+    ...checkText('name', '车型名称', input.name, CAR_LIMITS.name),
+    ...checkText('series', '所属系列', input.series, CAR_LIMITS.series),
+    ...checkText('tagline', '一句话卖点', input.tagline, CAR_LIMITS.tagline),
+    ...checkText('description', '车型描述', input.description, CAR_LIMITS.description),
+  ];
+
+  if (!Object.values(EnergyType).includes(input.energyType)) {
+    errors.push({ field: 'energyType', message: '请选择有效的能源类型' });
+  }
+  if (!Object.values(PublishStatus).includes(input.publishStatus)) {
+    errors.push({ field: 'publishStatus', message: '请选择有效的发布状态' });
+  }
+
+  const { min, max } = CAR_LIMITS.priceCents;
+  const checkPrice = (field: string, label: string, value: number): void => {
+    if (!Number.isInteger(value) || value < min || value > max) {
+      errors.push({ field, message: `${label}需为 ${min / 100}-${max / 100} 万元之间的整数分` });
+    }
+  };
+  checkPrice('priceMinCents', '最低价', input.priceMinCents);
+  checkPrice('priceMaxCents', '最高价', input.priceMaxCents);
+  if (input.priceMaxCents < input.priceMinCents) {
+    errors.push({ field: 'priceMaxCents', message: '最高价不能低于最低价' });
+  }
+  return errors;
+}
+
+export function normalizeCarImages(images: CarImageInput[]): CarImage[] {
+  const seen = new Set<string>();
+  const picked = images
+    .filter((image) => {
+      const url = image.url.trim();
+      if (!url || seen.has(url)) return false;
+      seen.add(url);
+      return true;
+    })
+    .slice(0, CAR_LIMITS.images.max);
+  const coverIndex = Math.max(
+    0,
+    picked.findIndex((image) => image.isCover),
+  );
+  return picked.map((image, index) => ({
+    id: image.id ?? `img-${index + 1}`,
+    url: image.url.trim(),
+    isCover: index === coverIndex,
+  }));
 }
 
 export const AdminRole = {
