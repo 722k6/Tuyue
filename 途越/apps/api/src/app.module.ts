@@ -2,6 +2,7 @@ import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common
 import { RequestIdMiddleware } from './common.js';
 import {
   ActivitiesController,
+  AnalyticsController,
   AuthController,
   CarsController,
   DealersController,
@@ -15,6 +16,7 @@ import {
     AuthController,
     ActivitiesController,
     DealersController,
+    AnalyticsController,
   ],
 })
 export class AppModule implements NestModule {

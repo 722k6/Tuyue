@@ -5,6 +5,7 @@ import {
   type ActivityDto,
   type AuthUser,
   type CarDetail,
+  type DashboardMetrics,
   type DealerDto,
 } from '@tuyue/contracts';
 
@@ -91,6 +92,20 @@ export const mockDealers: DealerDto[] = [
     businessHours: '09:00-18:00',
   },
 ];
+
+export const mockDashboardMetrics: DashboardMetrics = {
+  periodStart: '2026-10-27T00:00:00.000Z',
+  periodEnd: '2026-11-03T00:00:00.000Z',
+  totalVisits: 12_480,
+  aiUsageCount: 1_236,
+  comparisonCount: 842,
+  activityImpressions: 5_310,
+  popularCars: [
+    { carId: 'ty-suv-001', views: 3_120 },
+    { carId: 'ty-ev-001', views: 2_640 },
+    { carId: 'ty-hybrid-001', views: 1_850 },
+  ],
+};
 
 const rolePermissions: Record<AdminRole, AuthUser['permissions']> = {
   editor: ['content:edit'],

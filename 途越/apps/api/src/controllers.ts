@@ -7,8 +7,14 @@ import {
   Param,
   Post,
 } from '@nestjs/common';
-import { AdminRole, type AuthResponse, type MockLoginRequest } from '@tuyue/contracts';
-import { findMockAdmin, mockActivities, mockCars, mockDealers } from '@tuyue/test-utils';
+import { AdminRole, type AuthResponse, type DashboardMetrics, type MockLoginRequest } from '@tuyue/contracts';
+import {
+  findMockAdmin,
+  mockActivities,
+  mockCars,
+  mockDashboardMetrics,
+  mockDealers,
+} from '@tuyue/test-utils';
 
 @Controller('health')
 export class HealthController {
@@ -63,5 +69,26 @@ export class DealersController {
   @Get()
   listDealers() {
     return mockDealers;
+  }
+}
+
+interface TrackEventInput {
+  name?: string;
+  properties?: Record<string, string | number | boolean | null>;
+}
+
+@Controller('v1/analytics')
+export class AnalyticsController {
+  @Get('dashboard')
+  getDashboard(): DashboardMetrics {
+    return mockDashboardMetrics;
+  }
+
+  @Post('events')
+  ingest(@Body() input: TrackEventInput): { accepted: true } {
+    if (!input?.name) {
+      throw new BadRequestException({ code: 'INVALID_EVENT', message: '事件名不能为空' });
+    }
+    return { accepted: true };
   }
 }
