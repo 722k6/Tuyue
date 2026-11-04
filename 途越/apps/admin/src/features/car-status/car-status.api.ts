@@ -7,7 +7,7 @@ import type {
   CarStatusChangeResponse,
 } from '@tuyue/contracts';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api';
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 /** 带上业务错误码的异常：页面要区分「已是上架状态」和「网络挂了」。 */
 export class CarStatusApiError extends Error {

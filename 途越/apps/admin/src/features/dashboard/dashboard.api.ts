@@ -1,6 +1,6 @@
 import type { ApiResponse, DashboardMetrics } from '@tuyue/contracts';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api';
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 export async function fetchDashboard(): Promise<DashboardMetrics> {
   const response = await fetch(`${apiBaseUrl}/v1/analytics/dashboard`);

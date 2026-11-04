@@ -1,6 +1,6 @@
 import type { ActivityDto, ApiResponse } from '@tuyue/contracts';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api';
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 export async function fetchActivities(): Promise<ActivityDto[]> {
   const response = await fetch(`${apiBaseUrl}/v1/activities`);

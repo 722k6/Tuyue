@@ -1,6 +1,6 @@
 import type { AnalyticsEvent } from '@tuyue/contracts';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api';
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 export type TrackProperties = AnalyticsEvent['properties'];
 
