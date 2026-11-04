@@ -34,3 +34,14 @@ onMounted(async () => {
     </div>
   </section>
 </template>
+
+<style scoped>
+/* 加入对比按钮与详情链接并排，注意留出行距避免贴在一起 */
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+</style>

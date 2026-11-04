@@ -112,10 +112,19 @@ function statusTagType(status: PublishStatus): 'success' | 'info' | 'warning' {
     <p class="hint">下架即刻从官网消失，历史详情链接返回 404；每次上架/下架都会写入操作留痕。</p>
 
     <div class="toolbar">
-      <el-tag type="success" effect="plain">已上架 {{ store.publishedCount }} 台</el-tag>
-      <el-tag type="info" effect="plain">未上架 {{ store.offlineCount }} 台</el-tag>
+      <el-tag type="success" effect="plain" disable-transitions
+        >已上架 {{ store.publishedCount }} 台</el-tag
+      >
+      <el-tag type="info" effect="plain" disable-transitions
+        >未上架 {{ store.offlineCount }} 台</el-tag
+      >
       <div class="toolbar__spacer" />
-      <el-input v-model="store.keyword" class="toolbar__search" placeholder="搜索车型 / 系列" clearable />
+      <el-input
+        v-model="store.keyword"
+        class="toolbar__search"
+        placeholder="搜索车型 / 系列"
+        clearable
+      />
       <el-select v-model="store.statusFilter" class="toolbar__select">
         <el-option label="全部状态" value="all" />
         <el-option label="已上架" :value="PublishStatus.PUBLISHED" />
@@ -136,63 +145,69 @@ function statusTagType(status: PublishStatus): 'success' | 'info' | 'warning' {
 
     <p v-if="store.status === 'loading'" class="hint">车型列表加载中…</p>
 
-    <el-table
-      :data="store.visibleItems"
-      row-key="id"
-      class="car-table"
-      empty-text="没有符合条件的车型"
-    >
-      <el-table-column label="车型" min-width="180">
-        <template #default="{ row }">
-          <p class="car-name">{{ row.name }}</p>
-          <p class="car-series">{{ row.series }} · {{ row.id }}</p>
-        </template>
-      </el-table-column>
-      <el-table-column label="能源" width="100">
-        <template #default="{ row }">{{ row.energyType }}</template>
-      </el-table-column>
-      <el-table-column label="指导价" width="150">
-        <template #default="{ row }">{{ formatPrice(row.priceMinCents, row.priceMaxCents) }}</template>
-      </el-table-column>
-      <el-table-column label="状态" width="110">
-        <template #default="{ row }">
-          <el-tag :type="statusTagType(row.publishStatus)" effect="light">
-            {{ statusLabel(row.publishStatus) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="留痕" width="90">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openLogs(row)">{{ row.auditLogCount }} 条</el-button>
-        </template>
-      </el-table-column>
-      <el-table-column label="最近更新" width="180">
-        <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="150" fixed="right">
-        <template #default="{ row }">
-          <el-button
-            v-if="row.publishStatus !== PublishStatus.PUBLISHED"
-            type="primary"
-            size="small"
-            :loading="store.pendingCarId === row.id"
-            @click="publish(row)"
-          >
-            上架
-          </el-button>
-          <el-button
-            v-else
-            type="danger"
-            size="small"
-            plain
-            :loading="store.pendingCarId === row.id"
-            @click="offline(row)"
-          >
-            下架
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="table-scroll">
+      <el-table
+        :data="store.visibleItems"
+        row-key="id"
+        class="car-table"
+        empty-text="没有符合条件的车型"
+      >
+        <el-table-column label="车型" min-width="180">
+          <template #default="{ row }">
+            <p class="car-name">{{ row.name }}</p>
+            <p class="car-series">{{ row.series }} · {{ row.id }}</p>
+          </template>
+        </el-table-column>
+        <el-table-column label="能源" width="86">
+          <template #default="{ row }">{{ row.energyType }}</template>
+        </el-table-column>
+        <el-table-column label="指导价" width="132">
+          <template #default="{ row }">{{
+            formatPrice(row.priceMinCents, row.priceMaxCents)
+          }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="96">
+          <template #default="{ row }">
+            <el-tag :type="statusTagType(row.publishStatus)" effect="light" disable-transitions>
+              {{ statusLabel(row.publishStatus) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="留痕" width="78">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openLogs(row)"
+              >{{ row.auditLogCount }} 条</el-button
+            >
+          </template>
+        </el-table-column>
+        <el-table-column label="最近更新" width="150">
+          <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="112">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.publishStatus !== PublishStatus.PUBLISHED"
+              type="primary"
+              size="small"
+              :loading="store.pendingCarId === row.id"
+              @click="publish(row)"
+            >
+              上架
+            </el-button>
+            <el-button
+              v-else
+              type="danger"
+              size="small"
+              plain
+              :loading="store.pendingCarId === row.id"
+              @click="offline(row)"
+            >
+              下架
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
 
     <el-dialog v-model="logDialogVisible" title="操作留痕" width="640px">
       <p class="dialog-subtitle">{{ logDialogCar?.name }}（{{ logDialogCar?.id }}）</p>
@@ -207,7 +222,11 @@ function statusTagType(status: PublishStatus): 'success' | 'info' | 'warning' {
         </el-table-column>
         <el-table-column label="动作" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.action === CarStatusAction.PUBLISH ? 'success' : 'info'" size="small">
+            <el-tag
+              :type="row.action === CarStatusAction.PUBLISH ? 'success' : 'info'"
+              size="small"
+              disable-transitions
+            >
               {{ row.action === CarStatusAction.PUBLISH ? '上架' : '下架' }}
             </el-tag>
           </template>
@@ -227,6 +246,14 @@ function statusTagType(status: PublishStatus): 'success' | 'info' | 'warning' {
 </template>
 
 <style scoped>
+/* 后台表格信息密度高，允许比全局 section 更宽，避免列被挤掉 */
+section {
+  max-width: 1240px;
+}
+/* 七列合计约 840px，容器更窄时让它横向滚动，而不是把最后几列裁掉 */
+.table-scroll {
+  overflow-x: auto;
+}
 .hint {
   color: #6b7280;
   margin-bottom: 16px;
@@ -248,7 +275,7 @@ function statusTagType(status: PublishStatus): 'success' | 'info' | 'warning' {
   width: 140px;
 }
 .car-table {
-  width: 100%;
+  min-width: 840px;
 }
 .car-name {
   margin: 0;
