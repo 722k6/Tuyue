@@ -4,6 +4,7 @@ import {
   ElButton,
   ElCard,
   ElContainer,
+  ElDialog,
   ElEmpty,
   ElForm,
   ElFormItem,
@@ -14,6 +15,9 @@ import {
   ElMenuItem,
   ElOption,
   ElSelect,
+  ElTable,
+  ElTableColumn,
+  ElTag,
 } from 'element-plus';
 import 'element-plus/dist/index.css';
 import { createPinia } from 'pinia';
@@ -29,6 +33,7 @@ const app = createApp(App).use(createPinia()).use(router);
   ElButton,
   ElCard,
   ElContainer,
+  ElDialog,
   ElEmpty,
   ElForm,
   ElFormItem,
@@ -39,5 +44,8 @@ const app = createApp(App).use(createPinia()).use(router);
   ElMenuItem,
   ElOption,
   ElSelect,
+  ElTable,
+  ElTableColumn,
+  ElTag,
 ].forEach((component) => app.component(component.name!, component));
 app.mount('#app');

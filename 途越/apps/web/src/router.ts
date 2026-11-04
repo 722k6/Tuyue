@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import ActivityListPage from './pages/ActivityListPage.vue';
 import CarDetailPage from './pages/CarDetailPage.vue';
 import CarsPage from './pages/CarsPage.vue';
+import ComparePage from './pages/ComparePage.vue';
 import DealerListPage from './pages/DealerListPage.vue';
 import HomePage from './pages/HomePage.vue';
 import PlaceholderPage from './pages/PlaceholderPage.vue';
@@ -19,10 +20,7 @@ export const router = createRouter({
       component: PlaceholderPage,
       props: { title: 'AI 选车', description: 'AI 责任线入口占位。' },
     },
-    {
-      path: '/compare',
-      component: PlaceholderPage,
-      props: { title: '车型对比', description: '购车决策责任线入口占位。' },
-    },
+    // US-CMP-01/02：对比页不再是占位页
+    { path: '/compare', component: ComparePage },
   ],
 });

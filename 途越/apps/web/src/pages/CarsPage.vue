@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CarSummary } from '@tuyue/contracts';
 import { onMounted, ref } from 'vue';
+import CompareToggle from '../features/compare/CompareToggle.vue';
 import { webApi } from '../api';
 
 const cars = ref<CarSummary[]>([]);
@@ -25,7 +26,10 @@ onMounted(async () => {
         <p>{{ car.series }}</p>
         <h2>{{ car.name }}</h2>
         <p>{{ car.tagline }}</p>
-        <RouterLink :to="`/cars/${car.id}`">查看占位详情</RouterLink>
+        <div class="card-actions">
+          <RouterLink :to="`/cars/${car.id}`">查看占位详情</RouterLink>
+          <CompareToggle :car="car" />
+        </div>
       </article>
     </div>
   </section>

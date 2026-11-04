@@ -3,18 +3,12 @@ import {
   Body,
   Controller,
   Get,
-  NotFoundException,
   Param,
   Post,
 } from '@nestjs/common';
 import { AdminRole, type AuthResponse, type DashboardMetrics, type MockLoginRequest } from '@tuyue/contracts';
-import {
-  findMockAdmin,
-  mockActivities,
-  mockCars,
-  mockDashboardMetrics,
-  mockDealers,
-} from '@tuyue/test-utils';
+import { findMockAdmin, mockActivities, mockDashboardMetrics, mockDealers } from '@tuyue/test-utils';
+import { carRepository } from './car-repository.js';
 
 @Controller('health')
 export class HealthController {
@@ -26,16 +20,18 @@ export class HealthController {
 
 @Controller('v1/cars')
 export class CarsController {
+  /**
+   * 前台列表：只返回已上架车型（US-CAR-13「前台查询强制过滤已上架」）。
+   * 过滤放在服务端而不是前端 v-if，否则下架车型的图片和价格仍会随响应体发到浏览器。
+   */
   @Get()
   listCars() {
-    return mockCars;
+    return carRepository.listPublished();
   }
 
   @Get(':id')
   getCar(@Param('id') id: string) {
-    const car = mockCars.find((item) => item.id === id);
-    if (!car) throw new NotFoundException({ code: 'CAR_NOT_FOUND', message: '车型不存在' });
-    return car;
+    return carRepository.findPublishedDetail(id);
   }
 }
 
