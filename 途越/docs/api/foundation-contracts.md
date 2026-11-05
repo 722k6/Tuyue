@@ -192,3 +192,59 @@ Mock 数据集中在 `packages/test-utils/src/index.ts`，页面不得复制一�
 - 后台参数编辑按「动力 → 尺寸 → 安全 → 智能 → 其他」分组展示与保存。
 - 前端提交时保持分组顺序与组内顺序；服务端按提交顺序原样保存。
 - 对比矩阵继续按 `group` 分组，未分组数据仍由 `code` 关键字兜底归类。
+
+## Sprint 3 增量（2026-11-05 · 唐轩 · US-ADM-02）
+
+本节只新增审核能力，不改变 US-CAR-13 的上下架语义。
+
+### 新增接口
+
+| 方法 | 路径                                  | 用途                         |
+| ---- | ------------------------------------- | ---------------------------- |
+| GET  | `/api/v1/admin/cars/review/pending`   | 待审核队列（按更新时间倒序） |
+| POST | `/api/v1/admin/cars/:id/review`       | 提交审核 / 通过 / 驳回       |
+| GET  | `/api/v1/admin/cars/:id/review-logs`  | 审核留痕（时间倒序）         |
+
+审核请求体：
+
+```json
+{ "action": "submit", "comment": "参数与配置已核对", "actor": "唐轩" }
+```
+
+`action` 取值 `submit` / `approve` / `reject`。`comment` 在驳回时必填；`actor` 缺省时优先取请求头 `x-admin-user`，再缺省为 `system`。
+
+### 审核状态机
+
+| 动作    | 允许的起始状态        | 目标状态         | 非法状态                     |
+| ------- | --------------------- | ---------------- | ---------------------------- |
+| submit  | `draft` / `offline`   | `pending_review` | 待审核 409 / 已发布 409      |
+| approve | `pending_review`      | `published`      | 其他状态 409                 |
+| reject  | `pending_review`      | `draft`          | 其他状态 409；无意见 400     |
+
+审核通过后立即出现在前台 `GET /api/v1/cars`；驳回回到草稿，不自动下架已发布车型。上下架仍走 `POST /api/v1/admin/cars/:id/status`。
+
+### 角色临时适配
+
+- 后台登录页把角色和用户名写入 `localStorage` 的 `tuyue.admin.role` / `tuyue.admin.username`。
+- 后台请求统一携带 `x-admin-role` / `x-admin-user` 请求头。
+- `submit` 需要 `content:edit`（editor、super_admin）；`approve` / `reject` 需要 `content:review`（reviewer、super_admin）。
+- 编辑角色不能在车型表单里把未发布车型改成 `published`，否则返回 403；已发布车型继续编辑文案不受限制。
+- 后台路由 `/reviews` 仅对 reviewer、super_admin 开放；编辑角色可访问的菜单不显示「内容审核」。
+- 以上均为 US-SYS-01 落地前的临时适配，接入真实 Token 后应删除本地角色读取和请求头。
+
+### 新增错误码
+
+| code                     | HTTP | 含义                               |
+| ------------------------ | ---- | ---------------------------------- |
+| `INVALID_REVIEW_ACTION`  | 400  | 审核动作不是 submit/approve/reject |
+| `CAR_ALREADY_IN_REVIEW`  | 409  | 重复提交审核                       |
+| `CAR_NOT_IN_REVIEW`      | 409  | 对非待审核车型执行通过或驳回       |
+| `REVIEW_COMMENT_REQUIRED`| 400  | 驳回未填写审核意见                 |
+| `ROLE_REQUIRED`          | 400  | 缺少或无效的 `x-admin-role`        |
+| `FORBIDDEN_ROLE`         | 403  | 当前角色无权执行该操作             |
+
+`CAR_ALREADY_PUBLISHED` 复用 US-CAR-13 的定义：已发布车型重复提交审核返回 409。
+
+### 审核留痕
+
+每次成功操作写入一条 `CarReviewLog`：`action`、`fromStatus`、`toStatus`、`actor`、`comment`、`occurredAt`。审核留痕与上下架留痕分开保存，避免两类操作混在一起难以追溯。
