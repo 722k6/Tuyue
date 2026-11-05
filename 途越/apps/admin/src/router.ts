@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage.vue';
 import LoginPage from './pages/LoginPage.vue';
 import ModulePage from './pages/ModulePage.vue';
 import CarsPage from './pages/cars/CarsPage.vue';
+import { loadSession, setUnauthorizedHandler } from './session';
 
 const allRoles = Object.values(AdminRole);
 export const router = createRouter({
@@ -42,4 +43,26 @@ export const router = createRouter({
       ],
     },
   ],
+});
+
+// 守卫顺序：未登录 → 去登录页并记住原目标；已登录访问登录页 → 回看板；
+// 角色不足 → 回看板（US-SYS-02）
+router.beforeEach((to) => {
+  const session = loadSession();
+  if (to.path === '/login') return session ? '/dashboard' : true;
+  if (!to.meta.requiresAuth) return true;
+  if (!session) {
+    const redirect = to.fullPath === '/' ? undefined : to.fullPath;
+    return redirect ? { path: '/login', query: { redirect } } : '/login';
+  }
+  const roles = to.meta.roles as AdminRole[] | undefined;
+  if (roles && !roles.includes(session.user.role)) return '/dashboard';
+  return true;
+});
+
+// 接口返回 401：清掉本地登录态并把当前地址带入 redirect，登录后原路返回
+setUnauthorizedHandler(() => {
+  const current = router.currentRoute.value;
+  if (current.path === '/login') return;
+  void router.push({ path: '/login', query: { redirect: current.fullPath } });
 });

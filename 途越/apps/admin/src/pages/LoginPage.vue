@@ -1,14 +1,23 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { ApiRequestError, login } from '../api';
 import { saveSession } from '../session';
 
+const route = useRoute();
 const router = useRouter();
 const username = ref('');
 const password = ref('');
 const loading = ref(false);
 const errorMessage = ref('');
+
+/** 只接受站内路径，防止 ?redirect=//evil.com 这类跳转被利用。 */
+function resolveRedirect(): string {
+  const raw = Array.isArray(route.query.redirect) ? route.query.redirect[0] : route.query.redirect;
+  return typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//')
+    ? raw
+    : '/dashboard';
+}
 
 async function submit(): Promise<void> {
   errorMessage.value = '';
@@ -20,7 +29,7 @@ async function submit(): Promise<void> {
   try {
     const session = await login({ username: username.value.trim(), password: password.value });
     saveSession(session);
-    await router.push('/dashboard');
+    await router.push(resolveRedirect());
   } catch (error) {
     errorMessage.value =
       error instanceof ApiRequestError ? error.message : '登录失败，请稍后再试';

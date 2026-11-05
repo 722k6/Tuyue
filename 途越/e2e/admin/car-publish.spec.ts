@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { loginAs } from '../support/admin-session';
 import { waitForApiReady } from '../support/wait-for-api';
 
 const API_BASE = 'http://127.0.0.1:3000/api';
@@ -14,8 +15,10 @@ const WEB_BASE = 'http://localhost:5173';
 test.describe('CMS 车型上下架', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ request }) => {
+  test.beforeEach(async ({ page, request }) => {
     await waitForApiReady(request);
+    // US-SYS-02 起后台路由需要登录态
+    await loginAs(page);
     // 前置：确保被测车型处于已下线状态（上一次失败运行可能留下脏状态）
     await request.post(`${API_BASE}/v1/admin/cars/ty-legacy-001/status`, {
       data: { action: 'offline', reason: '回归前置' },
