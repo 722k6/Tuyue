@@ -349,6 +349,42 @@ export interface CarStatusChangeResponse {
   log: CarStatusAuditLog;
 }
 
+/* ------------------------------------------------------------------ *
+ * US-ADM-02 内容审核发布
+ * ------------------------------------------------------------------ */
+
+export const CarReviewAction = {
+  SUBMIT: 'submit',
+  APPROVE: 'approve',
+  REJECT: 'reject',
+} as const;
+export type CarReviewAction = (typeof CarReviewAction)[keyof typeof CarReviewAction];
+
+export interface CarReviewRequest {
+  action: CarReviewAction;
+  /** 驳回时必填；通过和提交时可选。 */
+  comment?: string;
+  /** 操作人标识；缺省时优先取请求头 x-admin-user，再缺省为 system。 */
+  actor?: string;
+}
+
+export interface CarReviewLog {
+  id: string;
+  carId: string;
+  carName: string;
+  action: CarReviewAction;
+  fromStatus: PublishStatus;
+  toStatus: PublishStatus;
+  actor: string;
+  comment: string | null;
+  occurredAt: string;
+}
+
+export interface CarReviewResponse {
+  car: AdminCarListItem;
+  log: CarReviewLog;
+}
+
 export const AdminRole = {
   EDITOR: 'editor',
   REVIEWER: 'reviewer',
@@ -357,6 +393,13 @@ export const AdminRole = {
 export type AdminRole = (typeof AdminRole)[keyof typeof AdminRole];
 
 export type PermissionCode = 'content:edit' | 'content:review' | 'content:publish' | 'admin:manage';
+
+/** 固定三角色的权限矩阵；US-SYS-01 接入真实鉴权后应由服务端 Token 解析复用。 */
+export const ADMIN_ROLE_PERMISSIONS: Record<AdminRole, PermissionCode[]> = {
+  editor: ['content:edit'],
+  reviewer: ['content:review', 'content:publish'],
+  super_admin: ['content:edit', 'content:review', 'content:publish', 'admin:manage'],
+};
 
 export interface MockLoginRequest {
   username: string;

@@ -3,7 +3,9 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
+  Headers,
   Inject,
   NotFoundException,
   Param,
@@ -16,6 +18,7 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import {
+  AdminRole,
   CAR_LIMITS,
   PublishStatus,
   type CarDetail,
@@ -38,6 +41,27 @@ import {
 
 function carNotFound(): NotFoundException {
   return new NotFoundException({ code: 'CAR_NOT_FOUND', message: '车型不存在' });
+}
+
+/**
+ * 编辑角色可以维护内容，但不能把未发布车型直接改成已发布；
+ * 已发布车型继续编辑内容时不拦截，避免连文案都改不了。超管保留直接发布能力。
+ */
+function assertCanPublish(
+  role: string | undefined,
+  nextStatus: PublishStatus,
+  currentStatus?: PublishStatus,
+): void {
+  if (
+    role?.trim() === AdminRole.EDITOR &&
+    nextStatus === PublishStatus.PUBLISHED &&
+    currentStatus !== PublishStatus.PUBLISHED
+  ) {
+    throw new ForbiddenException({
+      code: 'FORBIDDEN_ROLE',
+      message: '编辑角色不能直接发布车型，请提交审核',
+    });
+  }
 }
 
 @Controller('v1/admin/cars')
@@ -71,14 +95,25 @@ export class CarsAdminController {
   }
 
   @Post()
-  createCar(@Body() input: CarDraftInput): CarDetail {
+  createCar(
+    @Body() input: CarDraftInput,
+    @Headers('x-admin-role') role?: string,
+  ): CarDetail {
+    assertCanPublish(role, input.publishStatus);
     const car = this.store.create(input);
     carRepository.upsert(car);
     return car;
   }
 
   @Put(':id')
-  updateCar(@Param('id') id: string, @Body() input: CarDraftInput): CarDetail {
+  updateCar(
+    @Param('id') id: string,
+    @Body() input: CarDraftInput,
+    @Headers('x-admin-role') role?: string,
+  ): CarDetail {
+    const current = this.store.find(id);
+    if (!current) throw carNotFound();
+    assertCanPublish(role, input.publishStatus, current.publishStatus);
     const car = this.store.update(id, input);
     if (!car) throw carNotFound();
     carRepository.upsert(car);
