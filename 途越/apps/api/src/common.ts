@@ -46,6 +46,7 @@ export class UnifiedExceptionFilter implements ExceptionFilter {
         : status === 500
           ? '服务器内部错误'
           : '请求失败';
+    const details = body.details;
     response.status(status).json({
       success: false,
       error: {
@@ -56,6 +57,7 @@ export class UnifiedExceptionFilter implements ExceptionFilter {
               ? 'INTERNAL_ERROR'
               : 'HTTP_ERROR',
         message,
+        ...(details === undefined ? {} : { details }),
       },
       requestId: request.requestId,
     });
