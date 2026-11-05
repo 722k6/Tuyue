@@ -1,11 +1,13 @@
 import type {
   ApiError,
   ApiResponse,
+  AuthResponse,
   CarDetail,
   CarDraftInput,
   CarImage,
   CarImageInput,
   CarSummary,
+  LoginRequest,
   PaginatedResponse,
 } from '@tuyue/contracts';
 
@@ -108,6 +110,14 @@ export const carsApi = {
     );
   },
 };
+
+export function login(input: LoginRequest): Promise<AuthResponse> {
+  return request('/v1/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
 
 export async function getHealth(): Promise<ApiResponse<{ status: 'ok' }>> {
   const response = await fetch(`${apiBaseUrl}/health`);
