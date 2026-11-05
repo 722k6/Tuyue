@@ -29,7 +29,11 @@ export const mockCars: CarDetail[] = [
     priceMinCents: 18_990_000,
     priceMaxCents: 23_990_000,
     publishStatus: PublishStatus.PUBLISHED,
-    galleryUrls: ['/mock/cars/ty-suv-001-1.webp'],
+    galleryUrls: ['/mock/cars/ty-suv-001-1.webp', '/mock/cars/ty-suv-001-2.webp'],
+    images: [
+      { id: 'ty-suv-001-img-1', url: '/mock/cars/ty-suv-001-1.webp', isCover: true },
+      { id: 'ty-suv-001-img-2', url: '/mock/cars/ty-suv-001-2.webp', isCover: false },
+    ],
     description: '稳定的演示车型数据，供前后端并行联调。',
     parameters: [
       { code: 'engine', label: '发动机', value: '2.0T 涡轮增压', group: CarParameterGroup.POWER },
@@ -75,7 +79,11 @@ export const mockCars: CarDetail[] = [
     priceMinCents: 21_990_000,
     priceMaxCents: 27_990_000,
     publishStatus: PublishStatus.PUBLISHED,
-    galleryUrls: ['/mock/cars/ty-ev-001-1.webp'],
+    galleryUrls: ['/mock/cars/ty-ev-001-1.webp', '/mock/cars/ty-ev-001-2.webp'],
+    images: [
+      { id: 'ty-ev-001-img-1', url: '/mock/cars/ty-ev-001-1.webp', isCover: true },
+      { id: 'ty-ev-001-img-2', url: '/mock/cars/ty-ev-001-2.webp', isCover: false },
+    ],
     description: '纯电演示车型。',
     parameters: [
       { code: 'motor', label: '驱动电机', value: '后置单电机', group: CarParameterGroup.POWER },
@@ -125,6 +133,7 @@ export const mockCars: CarDetail[] = [
     priceMaxCents: 31_990_000,
     publishStatus: PublishStatus.PUBLISHED,
     galleryUrls: ['/mock/cars/ty-hybrid-001-1.webp'],
+    images: [{ id: 'ty-hybrid-001-img-1', url: '/mock/cars/ty-hybrid-001-1.webp', isCover: true }],
     description: '混动演示车型。',
     parameters: [
       {
@@ -176,6 +185,7 @@ export const mockCars: CarDetail[] = [
     priceMaxCents: 34_990_000,
     publishStatus: PublishStatus.PUBLISHED,
     galleryUrls: ['/mock/cars/ty-mpv-001-1.webp'],
+    images: [{ id: 'ty-mpv-001-img-1', url: '/mock/cars/ty-mpv-001-1.webp', isCover: true }],
     description: '七座 MPV 演示车型，用于验证 4 台上限与多车对比。',
     parameters: [
       { code: 'engine', label: '发动机', value: '2.0T 混动', group: CarParameterGroup.POWER },
@@ -223,6 +233,7 @@ export const mockCars: CarDetail[] = [
     priceMaxCents: 15_990_000,
     publishStatus: PublishStatus.OFFLINE,
     galleryUrls: ['/mock/cars/ty-legacy-001-1.webp'],
+    images: [{ id: 'ty-legacy-001-img-1', url: '/mock/cars/ty-legacy-001-1.webp', isCover: true }],
     description: '初始为已下线状态，用于验证「下架车型前台不可见」与「上架后重新出现」。',
     parameters: [
       { code: 'engine', label: '发动机', value: '1.5T 涡轮增压', group: CarParameterGroup.POWER },

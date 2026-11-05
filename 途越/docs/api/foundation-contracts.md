@@ -7,7 +7,7 @@
 `packages/contracts/src/index.ts` 是唯一共享类型入口：
 
 - 公共：`ApiResponse<T>`、`ApiError`、`PaginationQuery`、`PaginatedResponse<T>`、`SortDirection`
-- 车型：`CarSummary`、`CarDetail`、`CarParameter`、`CarConfigOption`、`EnergyType`、`PublishStatus`
+- 车型：`CarSummary`、`CarDetail`、`CarImage`、`CarDraftInput`、`CarImageInput`、`CarParameter`、`CarConfigOption`、`EnergyType`、`PublishStatus`、`CAR_LIMITS`、`CAR_IMAGE_TYPES`、`validateCarDraft`、`normalizeCarImages`
 - 权限：`AdminRole`、`PermissionCode`、`MockLoginRequest`、`AuthUser`、`AuthResponse`
 - AI：`AiChatRequest`、`AiStreamEvent`、`AiRecommendation`
 - 对比选配：`CompareItem`、`CompareParameterRow`、`ConfigurationSelection`、`QuoteResult`
@@ -17,18 +17,46 @@
 
 ## 接口列表
 
-| 方法 | 路径                      | 用途               |
-| ---- | ------------------------- | ------------------ |
-| GET  | `/api/health`             | 健康检查           |
-| GET  | `/api/v1/cars`            | 车型列表（**只含已上架**） |
-| GET  | `/api/v1/cars/:id`        | 车型详情（**已下架返回 404**） |
-| POST | `/api/v1/auth/mock-login` | 固定角色 Mock 登录 |
-| GET  | `/api/v1/activities`      | 活动 Mock 列表     |
-| GET  | `/api/v1/dealers`         | 经销商 Mock 列表   |
-| GET  | `/api/docs`               | Swagger UI         |
-| GET  | `/api/openapi.json`       | OpenAPI JSON       |
+| 方法   | 路径                                     | 用途                       |
+| ------ | ---------------------------------------- | -------------------------- |
+| GET    | `/api/health`                            | 健康检查                   |
+| GET    | `/api/v1/cars`                           | 车型列表（**只含已上架**） |
+| GET    | `/api/v1/cars/:id`                       | 车型详情（**已下架返回 404**） |
+| POST   | `/api/v1/auth/mock-login`                | 固定角色 Mock 登录         |
+| GET    | `/api/v1/activities`                     | 活动 Mock 列表             |
+| GET    | `/api/v1/dealers`                        | 经销商 Mock 列表           |
+| GET    | `/api/v1/admin/cars`                     | 后台车型列表（含已下线、带留痕条数，US-CAR-13） |
+| GET    | `/api/v1/admin/cars/search`              | 后台车型分页检索（keyword/status，US-CAR-10） |
+| GET    | `/api/v1/admin/cars/:id`                 | 后台车型详情               |
+| POST   | `/api/v1/admin/cars`                     | 新增车型                   |
+| PUT    | `/api/v1/admin/cars/:id`                 | 编辑车型                   |
+| DELETE | `/api/v1/admin/cars/:id`                 | 删除车型                   |
+| POST   | `/api/v1/admin/cars/:id/images`          | 多图上传（multipart）      |
+| PUT    | `/api/v1/admin/cars/:id/images`          | 保存图片顺序与主图         |
+| DELETE | `/api/v1/admin/cars/:id/images/:imageId` | 删除单张图片               |
+| GET    | `/static/uploads/*`                      | 已上传图片静态访问         |
+| GET    | `/api/docs`                              | Swagger UI                 |
+| GET    | `/api/openapi.json`                      | OpenAPI JSON               |
 
-成功响应统一为 `{ success: true, data, requestId }`。失败响应统一为 `{ success: false, error: { code, message }, requestId }`。不存在的车型返回 HTTP 404 和 `CAR_NOT_FOUND`。
+成功响应统一为 `{ success: true, data, requestId }`。失败响应统一为 `{ success: false, error: { code, message, details? }, requestId }`。不存在的车型返回 HTTP 404 和 `CAR_NOT_FOUND`。
+
+### 后台车型接口细则
+
+- 列表查询参数：`keyword`（匹配名称/系列/卖点）、`status`（`PublishStatus`）、`page`（默认 1）、`pageSize`（默认 10，上限 50），返回 `PaginatedResponse<CarSummary>`。
+- 新增与编辑使用同一份 `CarDraftInput`；校验规则在 `packages/contracts` 的 `validateCarDraft` 中，前端表单与接口共用，不重复实现。
+- 图片上传字段名为 `files`，支持 JPG/PNG/WebP，单张 ≤ 5MB，每个车型最多 9 张，落盘到 `apps/api/storage/uploads`，通过 `/static/uploads/<文件名>` 访问。
+- 图片顺序与主图由前端提交完整数组（`PUT /images`）覆盖；服务端保证有且仅有一张 `isCover`，未指定时取第一张；保存 `images` 时同步刷新 `galleryUrls` 与 `thumbnailUrl`。
+
+| 错误码                       | HTTP | 含义                       |
+| ---------------------------- | ---- | -------------------------- |
+| `CAR_NOT_FOUND`              | 404  | 车型不存在                 |
+| `CAR_VALIDATION_FAILED`      | 400  | 字段校验失败，`details` 为字段级错误列表 |
+| `CAR_STATUS_INVALID`         | 400  | 发布状态取值无效           |
+| `CAR_IMAGE_REQUIRED`         | 400  | 未选择图片                 |
+| `CAR_IMAGE_TYPE_UNSUPPORTED` | 400  | 图片格式不支持             |
+| `CAR_IMAGE_LIMIT_EXCEEDED`   | 400  | 图片数量超过 9 张          |
+| `CAR_IMAGE_NOT_FOUND`        | 404  | 图片不存在                 |
+| `CAR_IMAGE_PAYLOAD_INVALID`  | 400  | 图片顺序请求体格式错误     |
 
 ## 稳定 Mock ID
 
