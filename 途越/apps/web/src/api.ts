@@ -1,6 +1,6 @@
 import type { ApiResponse, CarDetail, CarSummary } from '@tuyue/contracts';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api';
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 async function get<T>(path: string): Promise<ApiResponse<T>> {
   const response = await fetch(`${apiBaseUrl}${path}`);

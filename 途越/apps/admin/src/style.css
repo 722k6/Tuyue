@@ -33,7 +33,11 @@ body {
 .login .el-card {
   width: min(420px, 90vw);
 }
-section {
+/*
+ * 内容区宽度上限。注意排除 .el-container：Element Plus 的容器渲染成 <section>，
+ * 不排除的话整个 CMS 外壳会被压到 960px，后台表格（7 列）直接放不下最后两列。
+ */
+section:not(.el-container) {
   max-width: 960px;
 }
 h1 {

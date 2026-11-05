@@ -20,8 +20,8 @@
 | 方法 | 路径                      | 用途               |
 | ---- | ------------------------- | ------------------ |
 | GET  | `/api/health`             | 健康检查           |
-| GET  | `/api/v1/cars`            | 车型 Mock 列表     |
-| GET  | `/api/v1/cars/:id`        | 单个车型 Mock 详情 |
+| GET  | `/api/v1/cars`            | 车型列表（**只含已上架**） |
+| GET  | `/api/v1/cars/:id`        | 车型详情（**已下架返回 404**） |
 | POST | `/api/v1/auth/mock-login` | 固定角色 Mock 登录 |
 | GET  | `/api/v1/activities`      | 活动 Mock 列表     |
 | GET  | `/api/v1/dealers`         | 经销商 Mock 列表   |
@@ -32,7 +32,7 @@
 
 ## 稳定 Mock ID
 
-- 车型：`ty-suv-001`、`ty-ev-001`、`ty-hybrid-001`
+- 车型：`ty-suv-001`、`ty-ev-001`、`ty-hybrid-001`、`ty-mpv-001`（均已上架）、`ty-legacy-001`（初始已下线，用于上下架回归）
 - 活动：`activity-001`
 - 经销商：`dealer-sh-001`、`dealer-bj-001`
 - 管理员：`mock-admin-1`、`mock-admin-2`、`mock-admin-3`
@@ -60,3 +60,56 @@ Mock 数据集中在 `packages/test-utils/src/index.ts`，页面不得复制一�
 ## 破坏性变更规则
 
 删除字段、改名、改变单位、缩窄枚举或改变响应结构均属于破坏性变更。提交此类改动前必须同时更新共享契约、OpenAPI、相关测试和本文档，并通知所有受影响责任人。新增可选字段通常可向后兼容，但仍需更新文档。
+
+## Sprint 3 增量（2026-11-04 · 周子涵 · US-CAR-13 / US-CMP-01 / US-CMP-02）
+
+本节记录新增能力与它们对已有责任线的影响。**没有删除或改名任何既有字段**，全部为增量。
+
+### 新增接口
+
+| 方法   | 路径                                | 用途                       | 归属      |
+| ------ | ----------------------------------- | -------------------------- | --------- |
+| GET    | `/api/v1/admin/cars`                | 后台车型列表（含已下线、带留痕条数） | US-CAR-13 |
+| GET    | `/api/v1/admin/cars/:id/audit-logs` | 上下架操作留痕（时间倒序） | US-CAR-13 |
+| POST   | `/api/v1/admin/cars/:id/status`     | 上架 / 下架                | US-CAR-13 |
+| GET    | `/api/v1/compare`                   | 读取对比清单（按 visitorId） | US-CMP-01 |
+| POST   | `/api/v1/compare/items`             | 加入对比                   | US-CMP-01 |
+| DELETE | `/api/v1/compare/items/:carId`      | 移除对比项                 | US-CMP-01 |
+| DELETE | `/api/v1/compare`                   | 清空对比清单               | US-CMP-01 |
+| GET    | `/api/v1/compare/matrix`            | 多车参数并集对齐矩阵       | US-CMP-02 |
+
+### 行为变更（非破坏性，但会影响前台页面）
+
+- `GET /api/v1/cars` 现在**强制只返回已上架车型**（原样返回全部 Mock 数据）。
+- `GET /api/v1/cars/:id` 对已下线车型返回 404 `CAR_NOT_FOUND`，用于前台走「不存在 / 已下架」占位页。
+- 影响：US-CAR-01（前台列表）、US-CAR-02（前台详情）无需自己再判断 `publishStatus`，拿到即可渲染；但不要期望列表里出现下架车型。
+
+### 新增状态码
+
+| code                     | HTTP | 场景                                 |
+| ------------------------ | ---- | ------------------------------------ |
+| `INVALID_STATUS_ACTION`  | 400  | 上下架动作不是 `publish` / `offline` |
+| `CAR_ALREADY_PUBLISHED`  | 409  | 对已上架车型再次上架                 |
+| `CAR_NOT_PUBLISHED`      | 409  | 对未上架车型下架；把下架车型加入对比 |
+| `COMPARE_LIMIT_EXCEEDED` | 409 / 400 | 超过 4 台对比上限              |
+| `CAR_ALREADY_IN_COMPARE` | 409  | 重复加入同一台车                     |
+| `CAR_NOT_IN_COMPARE`     | 404  | 移除不在清单里的车型                 |
+| `VISITOR_ID_REQUIRED`    | 400  | 对比接口缺少 `visitorId`             |
+| `COMPARE_EMPTY`          | 400  | 对比矩阵没有任何车型                 |
+
+### 契约新增（`packages/contracts`）
+
+- 车型：`CarParameterGroup`、`CarParameterGroupLabel`、`CarParameterGroupOrder`、`CarStatusAction`、`CarStatusChangeRequest`、`CarStatusAuditLog`、`CarStatusChangeResponse`、`AdminCarListItem`
+- 对比：`COMPARE_MAX_SIZE`、`CompareSelectionItem`、`CompareListResponse`、`CompareAddRequest`、`CompareMatrixColumn`、`CompareParameterGroupDto`、`CompareMatrixResponse`
+- `CarParameter` 新增**可选**字段 `group?: CarParameterGroup`（US-CAR-12 负责录入）；未录入时对比模块按 `code` 关键字兜底归类，不会整块落进「其他」。`CompareParameterRow` 同样新增可选 `unit` / `group`。
+
+### 参数与对比的约定
+
+- 参数并集：任何一台车独有的参数都会成行，不做交集。
+- 缺失值：一律 `null`，前端渲染「—」；**不允许用 `0` 或空串代替**。
+- 分组顺序固定：动力 → 尺寸 → 安全 → 智能 → 其他；组内按首次出现顺序。
+- 对比上限 4 台，服务端与前端各自校验；前端 localStore 只是副本，冲突以服务端业务错误为准。
+
+### 操作留痕
+
+每次成功上架/下架写入一条 `CarStatusAuditLog`：`action`、`fromStatus`、`toStatus`、`actor`、`reason`、`occurredAt`。`actor` 目前由后台页面从 `localStorage['tuyue.admin.username']` 取，缺省 `web-admin`；**US-SYS-01 落地后应改为从 Token 解析**。

@@ -1,7 +1,10 @@
 import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
+import { AdminCarsController } from './car-status.controller.js';
+import { CompareController } from './compare.controller.js';
 import { RequestIdMiddleware } from './common.js';
 import {
   ActivitiesController,
+  AnalyticsController,
   AuthController,
   CarsController,
   DealersController,
@@ -15,6 +18,9 @@ import {
     AuthController,
     ActivitiesController,
     DealersController,
+    AnalyticsController,
+    AdminCarsController,
+    CompareController,
   ],
 })
 export class AppModule implements NestModule {

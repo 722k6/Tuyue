@@ -19,10 +19,15 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "vitest run",
-    "test:e2e": "vitest run -c vitest.e2e.config.ts"
+    "test:e2e": "playwright test",
+    "test:e2e:api": "vitest run -c vitest.e2e.config.ts",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "e2e:install": "playwright install chromium"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
     "@types/node": "26.6.5",
     "@vitejs/plugin-vue": "6.0.10",
     "@vue/test-utils": "2.5.1",

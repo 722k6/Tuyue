@@ -2,6 +2,7 @@
 import type { CarDetail } from '@tuyue/contracts';
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import CompareToggle from '../features/compare/CompareToggle.vue';
 import { webApi } from '../api';
 
 const route = useRoute();
@@ -24,6 +25,7 @@ onMounted(async () => {
     </p>
     <template v-if="car">
       <h2>{{ car.name }}</h2>
+      <CompareToggle :car="car" />
       <p>{{ car.description }}</p>
       <p>车型 ID：{{ car.id }}</p>
     </template>

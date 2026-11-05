@@ -21,10 +21,12 @@ describe('Tuyue mock API', () => {
 
   it('returns the stable car fixture list', async () => {
     const response = await request(app.getHttpServer()).get('/api/v1/cars').expect(200);
+    // 只返回已上架车型：ty-legacy-001 初始为已下线，不出现在前台列表里
     expect(response.body.data.map((car: { id: string }) => car.id)).toEqual([
       'ty-suv-001',
       'ty-ev-001',
       'ty-hybrid-001',
+      'ty-mpv-001',
     ]);
   });
 
