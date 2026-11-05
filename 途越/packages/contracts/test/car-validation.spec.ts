@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   CAR_LIMITS,
+  CAR_PARAMETER_LIMITS,
+  CarParameterGroup,
   EnergyType,
   PublishStatus,
   normalizeCarImages,
   validateCarDraft,
+  validateCarParameters,
   type CarDraftInput,
+  type CarParameter,
 } from '../src/index';
 
 function draft(overrides: Partial<CarDraftInput> = {}): CarDraftInput {
@@ -66,6 +70,65 @@ describe('validateCarDraft', () => {
       }),
     );
     expect(errors.map((error) => error.field)).toEqual(['energyType', 'publishStatus']);
+  });
+});
+
+describe('validateCarParameters', () => {
+  const valid: CarParameter[] = [
+    { code: 'power', label: '最大功率', value: '185', unit: 'kW', group: CarParameterGroup.POWER },
+    { code: 'seats', label: '座位数', value: '5', unit: '座', group: CarParameterGroup.SIZE },
+  ];
+
+  it('accepts complete parameters and treats unit/group as optional', () => {
+    expect(validateCarParameters(valid)).toEqual([]);
+    expect(validateCarParameters([{ code: 'adas', label: '辅助驾驶', value: 'L2' }])).toEqual([]);
+  });
+
+  it('reports blank fields with the parameter index', () => {
+    const errors = validateCarParameters([
+      { code: ' ', label: '', value: '', unit: '', group: CarParameterGroup.POWER },
+    ]);
+    expect(errors.map((error) => error.field)).toEqual([
+      'parameters[0].code',
+      'parameters[0].label',
+      'parameters[0].value',
+    ]);
+  });
+
+  it('rejects duplicate codes case-insensitively', () => {
+    const errors = validateCarParameters([
+      { code: 'Power', label: '最大功率', value: '185', group: CarParameterGroup.POWER },
+      { code: 'power', label: '最大功率', value: '200', group: CarParameterGroup.POWER },
+    ]);
+    expect(errors).toEqual([
+      { field: 'parameters[1].code', message: '参数代码与第 1 条重复' },
+    ]);
+  });
+
+  it('rejects over-long text, unknown groups and too many rows', () => {
+    const longErrors = validateCarParameters([
+      {
+        code: 'x'.repeat(CAR_PARAMETER_LIMITS.code.max + 1),
+        label: 'y'.repeat(CAR_PARAMETER_LIMITS.label.max + 1),
+        value: 'z'.repeat(CAR_PARAMETER_LIMITS.value.max + 1),
+        unit: 'u'.repeat(CAR_PARAMETER_LIMITS.unit.max + 1),
+        group: 'battery' as CarParameterGroup,
+      },
+    ]);
+    expect(longErrors.map((error) => error.field)).toEqual([
+      'parameters[0].code',
+      'parameters[0].label',
+      'parameters[0].value',
+      'parameters[0].unit',
+      'parameters[0].group',
+    ]);
+
+    const tooMany = Array.from({ length: CAR_PARAMETER_LIMITS.max + 1 }, (_, index) => ({
+      code: `p${index}`,
+      label: `参数${index}`,
+      value: '1',
+    }));
+    expect(validateCarParameters(tooMany)[0]?.field).toBe('parameters');
   });
 });
 
