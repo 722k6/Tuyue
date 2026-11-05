@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
+  AdminRole,
+  CarReviewAction,
   EnergyType,
   PublishStatus,
   type CarSummary,
 } from '@tuyue/contracts';
 import { computed, onMounted, ref } from 'vue';
 import { ApiRequestError, carsApi, resolveAssetUrl } from '../../api';
+import { getAdminRole } from '../../features/admin-session';
+import { CarReviewApiError, submitReview } from '../../features/car-review/car-review.api';
 import CarFormDialog from './CarFormDialog.vue';
 import CarImagesDrawer from './CarImagesDrawer.vue';
 import CarParametersDrawer from './CarParametersDrawer.vue';
@@ -39,6 +43,10 @@ const imagesVisible = ref(false);
 const imagesCar = ref<CarSummary | null>(null);
 const parametersVisible = ref(false);
 const parametersCar = ref<CarSummary | null>(null);
+const submittingId = ref<string | null>(null);
+
+const role = getAdminRole();
+const canSubmitReview = role === AdminRole.EDITOR || role === AdminRole.SUPER_ADMIN;
 
 const isEmpty = computed(() => !loading.value && cars.value.length === 0);
 
@@ -98,6 +106,39 @@ function openImages(row: CarSummary): void {
 function openParameters(row: CarSummary): void {
   parametersCar.value = row;
   parametersVisible.value = true;
+}
+
+function canSubmitForReview(row: CarSummary): boolean {
+  return (
+    canSubmitReview &&
+    (row.publishStatus === PublishStatus.DRAFT ||
+      row.publishStatus === PublishStatus.OFFLINE)
+  );
+}
+
+async function submitForReview(row: CarSummary): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      `提交后「${row.name}」会进入待审核队列，审核通过才会发布到官网。确认提交？`,
+      '提交审核',
+      { type: 'info', confirmButtonText: '提交审核', cancelButtonText: '取消' },
+    );
+  } catch {
+    return;
+  }
+
+  submittingId.value = row.id;
+  try {
+    await submitReview(row.id, CarReviewAction.SUBMIT);
+    ElMessage.success(`「${row.name}」已提交审核`);
+    await load();
+  } catch (error) {
+    ElMessage.error(
+      error instanceof CarReviewApiError ? error.message : '提交审核失败，请稍后重试',
+    );
+  } finally {
+    submittingId.value = null;
+  }
 }
 
 async function remove(row: CarSummary): Promise<void> {
@@ -186,8 +227,17 @@ onMounted(load);
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="220" fixed="right">
+      <el-table-column label="操作" width="300" fixed="right">
         <template #default="{ row }">
+          <el-button
+            v-if="canSubmitForReview(row)"
+            link
+            type="success"
+            :loading="submittingId === row.id"
+            @click="submitForReview(row)"
+          >
+            提交审核
+          </el-button>
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
           <el-button link type="primary" @click="openParameters(row)">参数</el-button>
           <el-button link type="primary" @click="openImages(row)">图片</el-button>

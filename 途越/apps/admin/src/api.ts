@@ -9,6 +9,7 @@ import type {
   CarSummary,
   PaginatedResponse,
 } from '@tuyue/contracts';
+import { getAdminRole, getAdminUserHeader } from './features/admin-session';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
@@ -24,10 +25,21 @@ export class ApiRequestError extends Error {
   }
 }
 
+/** 临时角色头：US-SYS-01 接入 Token 后删除。 */
+function sessionHeaders(): Record<string, string> {
+  const role = getAdminRole();
+  if (!role) return {};
+  return { 'x-admin-role': role, 'x-admin-user': getAdminUserHeader() };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = {
+    ...(init?.headers as Record<string, string> | undefined),
+    ...sessionHeaders(),
+  };
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}${path}`, init);
+    response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers });
   } catch {
     throw new ApiRequestError('NETWORK_ERROR', '无法连接接口服务，请确认 API 已启动', 0);
   }
