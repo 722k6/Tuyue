@@ -10,6 +10,7 @@ import type {
   LoginRequest,
   PaginatedResponse,
 } from '@tuyue/contracts';
+import { getAccessToken, notifyUnauthorized } from './session';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
@@ -26,13 +27,19 @@ export class ApiRequestError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  // 登录接口自身返回 401 表示密码错误，不能当成登录态失效
+  const token = path === '/v1/auth/login' ? null : getAccessToken();
+  if (token) headers.set('authorization', `Bearer ${token}`);
+
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}${path}`, init);
+    response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers });
   } catch {
     throw new ApiRequestError('NETWORK_ERROR', '无法连接接口服务，请确认 API 已启动', 0);
   }
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | ApiError | null;
+  if (response.status === 401 && token) notifyUnauthorized();
   if (!response.ok || !payload || payload.success !== true) {
     const error = payload && payload.success === false ? payload.error : null;
     throw new ApiRequestError(

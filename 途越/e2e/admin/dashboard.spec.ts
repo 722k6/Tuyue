@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { loginAs } from '../support/admin-session';
 import { waitForApiReady } from '../support/wait-for-api';
 
 interface DashboardPayload {
@@ -15,8 +16,10 @@ interface DashboardPayload {
 const EXPECTED_KPI_LABELS = ['总访问量', 'AI 使用次数', '车型对比次数', '活动曝光'];
 
 test.describe('CMS 数据看板', () => {
-  test.beforeEach(async ({ request }) => {
+  test.beforeEach(async ({ page, request }) => {
     await waitForApiReady(request);
+    // US-SYS-02 起后台路由需要登录态
+    await loginAs(page);
   });
 
   test('渲染 4 个 KPI 与热门车型列表', async ({ page }) => {

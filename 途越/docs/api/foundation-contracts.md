@@ -13,7 +13,7 @@
 - 对比选配：`CompareItem`、`CompareParameterRow`、`ConfigurationSelection`、`QuoteResult`
 - 运营：`ActivityDto`、`DealerDto`、`AnalyticsEvent`、`DashboardMetrics`
 
-角色固定为 `editor`、`reviewer`、`super_admin`。已提供账号密码登录并签发 JWT（US-SYS-01）；接口鉴权守卫与前端路由守卫属于 US-SYS-02，尚未接入。
+角色固定为 `editor`、`reviewer`、`super_admin`。已提供账号密码登录并签发 JWT（US-SYS-01），后台路由守卫与登录态管理见 US-SYS-02；服务端接口鉴权守卫尚未实现。
 
 ## 接口列表
 
@@ -193,4 +193,16 @@ JWT payload 至少包含 `sub`（用户 ID）、`username`、`role`、`iat`、`e
 
 ### 前端约定
 
-登录成功后写入 `localStorage`：`tuyue.admin.session`（完整 `AuthResponse` JSON）与 `tuyue.admin.username`（供 US-CAR-13 的留痕使用）。请求头注入与 401 跳转在 US-SYS-02 实现。
+登录成功后写入 `localStorage`：`tuyue.admin.session`（完整 `AuthResponse` JSON）与 `tuyue.admin.username`（供 US-CAR-13 的留痕使用）。
+
+## Sprint 3 增量（2026-11-05 · 糜昊廷 · US-SYS-02 登录态与路由守卫）
+
+前端登录态统一走 `apps/admin/src/session.ts`：
+
+- `loadSession()` 读取 `tuyue.admin.session`；`expiresAt` 已过期、JSON 损坏或字段缺失时返回 `null` 并清除残留。
+- 业务请求自动携带 `Authorization: Bearer <accessToken>`；登录接口本身例外（它的 401 表示密码错误）。
+- 任意业务接口返回 `401` 时清除本地登录态，跳到 `/login?redirect=<当前地址>`；登录成功后回跳原页面（仅接受以 `/` 开头的站内路径）。
+- 路由守卫：`meta.requiresAuth` 的页面未登录时跳登录页；`meta.roles` 不匹配（如 editor 访问超管页）回 `/dashboard`；已登录访问 `/login` 直接回 `/dashboard`。
+- 退出登录：后台顶栏按钮清除 session 并回登录页。
+
+服务端尚未校验 Token，管理接口仍可被匿名调用，等后续鉴权守卫任务补齐。
