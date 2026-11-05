@@ -15,8 +15,13 @@ interface DashboardPayload {
 const EXPECTED_KPI_LABELS = ['总访问量', 'AI 使用次数', '车型对比次数', '活动曝光'];
 
 test.describe('CMS 数据看板', () => {
-  test.beforeEach(async ({ request }) => {
+  test.beforeEach(async ({ page, request }) => {
     await waitForApiReady(request);
+    // 后台路由守卫要求本地登录态，E2E 直接注入超管角色
+    await page.addInitScript(() => {
+      window.localStorage.setItem('tuyue.admin.role', 'super_admin');
+      window.localStorage.setItem('tuyue.admin.username', 'e2e');
+    });
   });
 
   test('渲染 4 个 KPI 与热门车型列表', async ({ page }) => {

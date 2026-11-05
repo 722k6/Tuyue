@@ -14,8 +14,13 @@ const WEB_BASE = 'http://localhost:5173';
 test.describe('CMS 车型上下架', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ request }) => {
+  test.beforeEach(async ({ page, request }) => {
     await waitForApiReady(request);
+    // 后台路由守卫要求本地登录态，E2E 直接注入超管角色
+    await page.addInitScript(() => {
+      window.localStorage.setItem('tuyue.admin.role', 'super_admin');
+      window.localStorage.setItem('tuyue.admin.username', 'e2e');
+    });
     // 前置：确保被测车型处于已下线状态（上一次失败运行可能留下脏状态）
     await request.post(`${API_BASE}/v1/admin/cars/ty-legacy-001/status`, {
       data: { action: 'offline', reason: '回归前置' },
