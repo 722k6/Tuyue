@@ -141,3 +141,54 @@ Mock 数据集中在 `packages/test-utils/src/index.ts`，页面不得复制一�
 ### 操作留痕
 
 每次成功上架/下架写入一条 `CarStatusAuditLog`：`action`、`fromStatus`、`toStatus`、`actor`、`reason`、`occurredAt`。`actor` 目前由后台页面从 `localStorage['tuyue.admin.username']` 取，缺省 `web-admin`；**US-SYS-01 落地后应改为从 Token 解析**。
+
+## Sprint 3 增量（2026-11-05 · 唐轩 · US-CAR-12）
+
+本节只新增能力，没有删除或改名既有字段。
+
+### 新增接口
+
+| 方法 | 路径                                     | 用途                         |
+| ---- | ---------------------------------------- | ---------------------------- |
+| PUT  | `/api/v1/admin/cars/:id/parameters`      | 整体覆盖保存车型参数（后台） |
+
+请求体：
+
+```json
+{
+  "parameters": [
+    { "code": "power", "label": "最大功率", "value": "185", "unit": "kW", "group": "power" }
+  ]
+}
+```
+
+成功后返回更新后的 `CarDetail`。参数由前端提交完整数组，服务端整体覆盖，不做增量合并。
+
+### 参数规则
+
+- `code` 必填、trim 后不能为空、不区分大小写唯一，最长 40 字符。
+- `label` 必填，最长 20 字符；`value` 必填，最长 40 字符；`unit` 可选，最长 12 字符。
+- `group` 可选；缺省时服务端补为 `other`。允许值固定为 `power` / `size` / `safety` / `smart` / `other`。
+- 每个车型最多 60 条参数。
+- 校验函数为 `packages/contracts` 的 `validateCarParameters`，后台表单与接口共用同一份规则。
+- 参数模板尚未确认，因此本次不固化字段清单，只保证分组、代码唯一和缺失值约定。
+
+### 新增错误码
+
+| code                    | HTTP | 含义                                   |
+| ----------------------- | ---- | -------------------------------------- |
+| `CAR_PARAMETER_INVALID` | 400  | 参数校验失败，`details` 为字段级错误列表 |
+
+### 数据同步
+
+后台编辑使用 `CarStore`，前台详情、对比与审核队列使用 `carRepository`。本次新增最小同步桥：
+
+- 后台新增、编辑、删除车型，保存图片和参数后，同步写入 `carRepository`。
+- 删除车型时同时移除该车型的状态留痕。
+- 不合并两个内存 Store，避免影响已有责任线；后续接入真实数据库时应统一为一个数据源。
+
+### 展示约定
+
+- 后台参数编辑按「动力 → 尺寸 → 安全 → 智能 → 其他」分组展示与保存。
+- 前端提交时保持分组顺序与组内顺序；服务端按提交顺序原样保存。
+- 对比矩阵继续按 `group` 分组，未分组数据仍由 `code` 关键字兜底归类。
