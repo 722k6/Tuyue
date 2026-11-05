@@ -9,6 +9,7 @@ import { computed, onMounted, ref } from 'vue';
 import { ApiRequestError, carsApi, resolveAssetUrl } from '../../api';
 import CarFormDialog from './CarFormDialog.vue';
 import CarImagesDrawer from './CarImagesDrawer.vue';
+import CarParametersDrawer from './CarParametersDrawer.vue';
 
 const ENERGY_LABEL: Record<EnergyType, string> = {
   [EnergyType.GASOLINE]: '燃油',
@@ -36,6 +37,8 @@ const formVisible = ref(false);
 const formCarId = ref<string | null>(null);
 const imagesVisible = ref(false);
 const imagesCar = ref<CarSummary | null>(null);
+const parametersVisible = ref(false);
+const parametersCar = ref<CarSummary | null>(null);
 
 const isEmpty = computed(() => !loading.value && cars.value.length === 0);
 
@@ -90,6 +93,11 @@ function openEdit(row: CarSummary): void {
 function openImages(row: CarSummary): void {
   imagesCar.value = row;
   imagesVisible.value = true;
+}
+
+function openParameters(row: CarSummary): void {
+  parametersCar.value = row;
+  parametersVisible.value = true;
 }
 
 async function remove(row: CarSummary): Promise<void> {
@@ -178,9 +186,10 @@ onMounted(load);
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column label="操作" width="220" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+          <el-button link type="primary" @click="openParameters(row)">参数</el-button>
           <el-button link type="primary" @click="openImages(row)">图片</el-button>
           <el-button link type="danger" @click="remove(row)">删除</el-button>
         </template>
@@ -208,6 +217,12 @@ onMounted(load);
       v-model="imagesVisible"
       :car-id="imagesCar?.id ?? null"
       :car-name="imagesCar?.name ?? ''"
+    />
+    <CarParametersDrawer
+      v-model="parametersVisible"
+      :car-id="parametersCar?.id ?? null"
+      :car-name="parametersCar?.name ?? ''"
+      @saved="load"
     />
   </section>
 </template>
