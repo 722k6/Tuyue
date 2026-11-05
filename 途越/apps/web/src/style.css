@@ -31,7 +31,8 @@ a {
 main {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 64px 24px;
+  /* 底部留出悬浮对比栏的高度，避免最后一屏内容被遮住 */
+  padding: 64px 24px 140px;
 }
 h1 {
   font-size: clamp(2rem, 5vw, 4rem);

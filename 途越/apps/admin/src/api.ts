@@ -9,7 +9,7 @@ import type {
   PaginatedResponse,
 } from '@tuyue/contracts';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api';
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 export class ApiRequestError extends Error {
   constructor(
@@ -67,7 +67,7 @@ function toQuery(params: CarListParams): string {
 
 export const carsApi = {
   list(params: CarListParams = {}): Promise<PaginatedResponse<CarSummary>> {
-    return request(`/v1/admin/cars?${toQuery(params)}`);
+    return request(`/v1/admin/cars/search?${toQuery(params)}`);
   },
   detail(id: string): Promise<CarDetail> {
     return request(`/v1/admin/cars/${encodeURIComponent(id)}`);

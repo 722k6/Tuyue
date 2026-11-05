@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import { mockCars } from '@tuyue/test-utils';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApplication } from '../src/app.js';
@@ -31,23 +32,23 @@ describe('admin car CRUD API', () => {
 
   it('lists cars with pagination metadata', async () => {
     const response = await request(app.getHttpServer())
-      .get('/api/v1/admin/cars?page=1&pageSize=2')
+      .get('/api/v1/admin/cars/search?page=1&pageSize=2')
       .expect(200);
 
     expect(response.body.success).toBe(true);
-    expect(response.body.data.total).toBe(3);
+    expect(response.body.data.total).toBe(mockCars.length);
     expect(response.body.data.items).toHaveLength(2);
     expect(response.body.data.pageSize).toBe(2);
   });
 
   it('filters by keyword and publish status', async () => {
     const keyword = await request(app.getHttpServer())
-      .get('/api/v1/admin/cars?keyword=星驰')
+      .get('/api/v1/admin/cars/search?keyword=星驰')
       .expect(200);
     expect(keyword.body.data.items.map((car: { id: string }) => car.id)).toEqual(['ty-ev-001']);
 
     const status = await request(app.getHttpServer())
-      .get('/api/v1/admin/cars?status=draft')
+      .get('/api/v1/admin/cars/search?status=draft')
       .expect(200);
     expect(status.body.data.total).toBe(0);
   });

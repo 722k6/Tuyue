@@ -42,7 +42,9 @@ function carNotFound(): NotFoundException {
 export class CarsAdminController {
   constructor(@Inject(CarStore) private readonly store: CarStore) {}
 
-  @Get()
+  // 注意：`GET /v1/admin/cars` 已被 US-CAR-13 的「全量 + 留痕」列表占用（AdminCarsController），
+  // 本接口是后台分页检索视图，落在 /search，避免两个 Controller 抢同一个路径。
+  @Get('search')
   listCars(@Query() query: CarListQuery): PaginatedResponse<CarSummary> {
     const status = query.status?.trim();
     if (status && !Object.values(PublishStatus).includes(status as PublishStatus)) {

@@ -20,8 +20,8 @@ describe('admin cars API client', () => {
     await carsApi.list({ keyword: '星驰', status: 'published', page: 2, pageSize: 20 });
 
     const call = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
-    const url = new URL(call[0]);
-    expect(url.pathname).toBe('/api/v1/admin/cars');
+    const url = new URL(call[0], 'http://localhost');
+    expect(url.pathname).toBe('/api/v1/admin/cars/search');
     expect(url.searchParams.get('keyword')).toBe('星驰');
     expect(url.searchParams.get('page')).toBe('2');
     expect(url.searchParams.get('pageSize')).toBe('20');
@@ -76,9 +76,8 @@ describe('admin cars API client', () => {
   });
 
   it('resolves stored image paths against the API origin', () => {
-    expect(resolveAssetUrl('/static/uploads/a.webp')).toBe(
-      'http://localhost:3000/static/uploads/a.webp',
-    );
+    // apiBaseUrl 默认走 vite 代理（'/api'），去掉 /api 前缀后仍是同源相对路径。
+    expect(resolveAssetUrl('/static/uploads/a.webp')).toBe('/static/uploads/a.webp');
     expect(resolveAssetUrl('https://cdn.example.com/a.webp')).toBe(
       'https://cdn.example.com/a.webp',
     );
