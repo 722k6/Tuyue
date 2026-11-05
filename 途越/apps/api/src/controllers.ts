@@ -6,8 +6,8 @@ import {
   Param,
   Post,
 } from '@nestjs/common';
-import { AdminRole, type AuthResponse, type DashboardMetrics, type MockLoginRequest } from '@tuyue/contracts';
-import { findMockAdmin, mockActivities, mockDashboardMetrics, mockDealers } from '@tuyue/test-utils';
+import type { DashboardMetrics } from '@tuyue/contracts';
+import { mockActivities, mockDashboardMetrics, mockDealers } from '@tuyue/test-utils';
 import { carRepository } from './car-repository.js';
 
 @Controller('health')
@@ -32,23 +32,6 @@ export class CarsController {
   @Get(':id')
   getCar(@Param('id') id: string) {
     return carRepository.findPublishedDetail(id);
-  }
-}
-
-@Controller('v1/auth')
-export class AuthController {
-  @Post('mock-login')
-  mockLogin(@Body() input: MockLoginRequest): AuthResponse {
-    const role = input.role ?? AdminRole.EDITOR;
-    if (!Object.values(AdminRole).includes(role)) {
-      throw new BadRequestException({ code: 'INVALID_ROLE', message: '无效的管理员角色' });
-    }
-    const user = { ...findMockAdmin(role), username: input.username || `mock_${role}` };
-    return {
-      accessToken: `mock-token-${role}`,
-      user,
-      expiresAt: '2026-10-28T00:00:00.000Z',
-    };
   }
 }
 
