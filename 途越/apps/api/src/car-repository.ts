@@ -56,6 +56,20 @@ export class CarRepository {
     this.logs = [];
   }
 
+  /**
+   * 后台编辑写入后同步到本仓库，保证前台详情、对比和审核队列读到同一份数据。
+   * Mock 阶段存在两套内存 Store，合并会牵动已有责任线，因此这里用最小写入桥接。
+   */
+  upsert(car: CarDetail): void {
+    this.cars.set(car.id, structuredClone(car));
+  }
+
+  remove(carId: string): boolean {
+    const removed = this.cars.delete(carId);
+    if (removed) this.logs = this.logs.filter((log) => log.carId !== carId);
+    return removed;
+  }
+
   /** 前台列表：强制只返回已上架车型（US-CAR-13 验收点）。 */
   listPublished(): CarSummary[] {
     return [...this.cars.values()]
