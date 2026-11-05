@@ -22,9 +22,11 @@ import {
   type CarDraftInput,
   type CarImage,
   type CarImageInput,
+  type CarParametersUpdateRequest,
   type CarSummary,
   type PaginatedResponse,
 } from '@tuyue/contracts';
+import { carRepository } from '../car-repository.js';
 import { CarStore, type CarListQuery } from './car-store.js';
 import {
   buildStoredFilename,
@@ -70,13 +72,35 @@ export class CarsAdminController {
 
   @Post()
   createCar(@Body() input: CarDraftInput): CarDetail {
-    return this.store.create(input);
+    const car = this.store.create(input);
+    carRepository.upsert(car);
+    return car;
   }
 
   @Put(':id')
   updateCar(@Param('id') id: string, @Body() input: CarDraftInput): CarDetail {
     const car = this.store.update(id, input);
     if (!car) throw carNotFound();
+    carRepository.upsert(car);
+    return car;
+  }
+
+  @Put(':id/parameters')
+  saveParameters(
+    @Param('id') id: string,
+    @Body() body: CarParametersUpdateRequest,
+  ): CarDetail {
+    if (!this.store.find(id)) throw carNotFound();
+    if (!Array.isArray(body?.parameters)) {
+      throw new BadRequestException({
+        code: 'CAR_PARAMETER_INVALID',
+        message: '参数列表格式错误',
+        details: [{ field: 'parameters', message: '参数列表格式错误' }],
+      });
+    }
+    const car = this.store.setParameters(id, body.parameters);
+    if (!car) throw carNotFound();
+    carRepository.upsert(car);
     return car;
   }
 
@@ -86,6 +110,7 @@ export class CarsAdminController {
     if (!car) throw carNotFound();
     void Promise.all(car.images.map((image) => removeStoredFile(image.url)));
     this.store.remove(id);
+    carRepository.remove(id);
     return { id };
   }
 
@@ -130,10 +155,13 @@ export class CarsAdminController {
       });
     }
     try {
-      return this.store.addImages(
+      const images = this.store.addImages(
         id,
         files.map((file) => toPublicUrl(file.filename)),
       )!;
+      const updated = this.store.find(id);
+      if (updated) carRepository.upsert(updated);
+      return images;
     } catch (error) {
       await cleanup();
       throw error;
@@ -152,6 +180,8 @@ export class CarsAdminController {
     }
     const next = this.store.setImages(id, body.images);
     if (!next) throw carNotFound();
+    const updated = this.store.find(id);
+    if (updated) carRepository.upsert(updated);
     const keptUrls = new Set(next.map((image) => image.url));
     const removed = car.images.filter((image) => !keptUrls.has(image.url));
     void Promise.all(removed.map((image) => removeStoredFile(image.url)));
@@ -168,6 +198,8 @@ export class CarsAdminController {
     }
     const next = this.store.removeImage(id, imageId);
     if (!next) throw carNotFound();
+    const updated = this.store.find(id);
+    if (updated) carRepository.upsert(updated);
     void removeStoredFile(target.url);
     return next;
   }

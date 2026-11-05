@@ -193,6 +193,100 @@ export function validateCarDraft(input: CarDraftInput): CarFieldError[] {
   return errors;
 }
 
+/* ------------------------------------------------------------------ *
+ * US-CAR-12 车型参数管理
+ * ------------------------------------------------------------------ */
+
+export const CAR_PARAMETER_LIMITS = {
+  max: 60,
+  code: { min: 1, max: 40 },
+  label: { min: 1, max: 20 },
+  value: { min: 1, max: 40 },
+  unit: { max: 12 },
+} as const;
+
+export interface CarParametersUpdateRequest {
+  parameters: CarParameter[];
+}
+
+/**
+ * 参数由后台整体覆盖保存。这里返回字段级错误，前端按 `parameters[i].field`
+ * 定位到具体行，避免只提示「保存失败」却不知道是哪一条参数有问题。
+ */
+export function validateCarParameters(parameters: CarParameter[]): CarFieldError[] {
+  const errors: CarFieldError[] = [];
+  if (parameters.length > CAR_PARAMETER_LIMITS.max) {
+    errors.push({
+      field: 'parameters',
+      message: `每个车型最多维护 ${CAR_PARAMETER_LIMITS.max} 条参数`,
+    });
+  }
+
+  const seen = new Map<string, number>();
+  parameters.forEach((parameter, index) => {
+    const item = parameter as CarParameter | null;
+    const prefix = `parameters[${index}]`;
+    const code = item?.code?.trim() ?? '';
+    const label = item?.label?.trim() ?? '';
+    const value = item?.value?.trim() ?? '';
+    const unit = item?.unit?.trim() ?? '';
+
+    if (!code) {
+      errors.push({ field: `${prefix}.code`, message: '参数代码不能为空' });
+    } else if (code.length > CAR_PARAMETER_LIMITS.code.max) {
+      errors.push({
+        field: `${prefix}.code`,
+        message: `参数代码不能超过 ${CAR_PARAMETER_LIMITS.code.max} 个字符`,
+      });
+    } else {
+      const key = code.toLowerCase();
+      const firstIndex = seen.get(key);
+      if (firstIndex === undefined) {
+        seen.set(key, index);
+      } else {
+        errors.push({
+          field: `${prefix}.code`,
+          message: `参数代码与第 ${firstIndex + 1} 条重复`,
+        });
+      }
+    }
+
+    if (!label) {
+      errors.push({ field: `${prefix}.label`, message: '参数名称不能为空' });
+    } else if (label.length > CAR_PARAMETER_LIMITS.label.max) {
+      errors.push({
+        field: `${prefix}.label`,
+        message: `参数名称不能超过 ${CAR_PARAMETER_LIMITS.label.max} 个字符`,
+      });
+    }
+
+    if (!value) {
+      errors.push({ field: `${prefix}.value`, message: '参数值不能为空' });
+    } else if (value.length > CAR_PARAMETER_LIMITS.value.max) {
+      errors.push({
+        field: `${prefix}.value`,
+        message: `参数值不能超过 ${CAR_PARAMETER_LIMITS.value.max} 个字符`,
+      });
+    }
+
+    if (unit.length > CAR_PARAMETER_LIMITS.unit.max) {
+      errors.push({
+        field: `${prefix}.unit`,
+        message: `单位不能超过 ${CAR_PARAMETER_LIMITS.unit.max} 个字符`,
+      });
+    }
+
+    if (
+      item?.group !== undefined &&
+      !Object.values(CarParameterGroup).includes(item.group)
+    ) {
+      errors.push({ field: `${prefix}.group`, message: '请选择有效的参数分组' });
+    }
+  });
+
+  return errors;
+}
+
 export function normalizeCarImages(images: CarImageInput[]): CarImage[] {
   const seen = new Set<string>();
   const picked = images

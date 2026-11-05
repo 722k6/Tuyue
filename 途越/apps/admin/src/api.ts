@@ -5,6 +5,7 @@ import type {
   CarDraftInput,
   CarImage,
   CarImageInput,
+  CarParameter,
   CarSummary,
   PaginatedResponse,
 } from '@tuyue/contracts';
@@ -88,6 +89,13 @@ export const carsApi = {
   },
   remove(id: string): Promise<{ id: string }> {
     return request(`/v1/admin/cars/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+  saveParameters(id: string, parameters: CarParameter[]): Promise<CarDetail> {
+    return request(`/v1/admin/cars/${encodeURIComponent(id)}/parameters`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parameters }),
+    });
   },
   uploadImages(id: string, files: File[]): Promise<CarImage[]> {
     const body = new FormData();
