@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   CAR_LIMITS,
   CarParameterGroup,
+  PublishStatus,
   normalizeCarImages,
   validateCarDraft,
   validateCarParameters,
@@ -178,6 +179,19 @@ export class CarStore {
     const updated: CarDetail = {
       ...car,
       parameters: normalized,
+      updatedAt: new Date().toISOString(),
+    };
+    this.cars.set(id, updated);
+    return cloneCar(updated);
+  }
+
+  /** 审核流转后把状态回写到编辑侧 Store，避免两个内存数据源显示的发布状态不一致。 */
+  patchStatus(id: string, status: PublishStatus): CarDetail | null {
+    const car = this.cars.get(id);
+    if (!car) return null;
+    const updated: CarDetail = {
+      ...car,
+      publishStatus: status,
       updatedAt: new Date().toISOString(),
     };
     this.cars.set(id, updated);
