@@ -5,6 +5,7 @@ import {
   type ExceptionFilter,
   type ExecutionContext,
   HttpException,
+  Logger,
   type NestInterceptor,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -33,11 +34,17 @@ export class SuccessResponseInterceptor<T> implements NestInterceptor<T, unknown
 
 @Catch()
 export class UnifiedExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger('UnifiedExceptionFilter');
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
     const response = http.getResponse<Response>();
     const request = http.getRequest<RequestWithId>();
     const status = exception instanceof HttpException ? exception.getStatus() : 500;
+    if (status >= 500) {
+      // 统一响应体隐藏内部细节，堆栈只能在这里落日志
+      this.logger.error(exception instanceof Error ? exception.stack : String(exception));
+    }
     const raw = exception instanceof HttpException ? exception.getResponse() : null;
     const body = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
     const message =

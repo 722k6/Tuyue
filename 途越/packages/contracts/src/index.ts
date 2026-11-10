@@ -405,6 +405,10 @@ export interface MockLoginRequest {
   username: string;
   role?: AdminRole;
 }
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
 export interface AuthUser {
   id: string;
   username: string;
