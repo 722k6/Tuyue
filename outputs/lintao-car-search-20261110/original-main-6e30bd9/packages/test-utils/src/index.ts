@@ -1,0 +1,312 @@
+import {
+  AdminRole,
+  CarParameterGroup,
+  EnergyType,
+  PublishStatus,
+  type ActivityDto,
+  type AuthUser,
+  type CarDetail,
+  type DashboardMetrics,
+  type DealerDto,
+} from '@tuyue/contracts';
+
+/**
+ * 车型 Mock 数据。
+ *
+ * 参数刻意做成「同码不同值 + 彼此缺项」的形态：对比表（US-CMP-02）需要真实存在
+ * 的并集、差异行和缺失格，才能验证分组对齐与占位符渲染，全部对齐的假数据测不出问题。
+ * 第四台 `ty-mpv-001` 让「最多 4 台」的限制在 UI 上可以被真正触发；
+ * 第五台 `ty-legacy-001` 初始为已下线状态，供「车型上下架」（US-CAR-13）演示与回归。
+ */
+export const mockCars: CarDetail[] = [
+  {
+    id: 'ty-suv-001',
+    name: '途越远行',
+    series: '远行系列',
+    energyType: EnergyType.GASOLINE,
+    tagline: '从容应对每一段旅程',
+    thumbnailUrl: '/mock/cars/ty-suv-001.webp',
+    priceMinCents: 18_990_000,
+    priceMaxCents: 23_990_000,
+    publishStatus: PublishStatus.PUBLISHED,
+    galleryUrls: ['/mock/cars/ty-suv-001-1.webp', '/mock/cars/ty-suv-001-2.webp'],
+    images: [
+      { id: 'ty-suv-001-img-1', url: '/mock/cars/ty-suv-001-1.webp', isCover: true },
+      { id: 'ty-suv-001-img-2', url: '/mock/cars/ty-suv-001-2.webp', isCover: false },
+    ],
+    description: '稳定的演示车型数据，供前后端并行联调。',
+    parameters: [
+      { code: 'engine', label: '发动机', value: '2.0T 涡轮增压', group: CarParameterGroup.POWER },
+      { code: 'power', label: '最大功率', value: '185', unit: 'kW', group: CarParameterGroup.POWER },
+      {
+        code: 'torque',
+        label: '最大扭矩',
+        value: '380',
+        unit: 'N·m',
+        group: CarParameterGroup.POWER,
+      },
+      {
+        code: 'acceleration',
+        label: '零百加速',
+        value: '8.1',
+        unit: 's',
+        group: CarParameterGroup.POWER,
+      },
+      { code: 'length', label: '车长', value: '4780', unit: 'mm', group: CarParameterGroup.SIZE },
+      {
+        code: 'wheelbase',
+        label: '轴距',
+        value: '2820',
+        unit: 'mm',
+        group: CarParameterGroup.SIZE,
+      },
+      { code: 'seats', label: '座位数', value: '5', unit: '座', group: CarParameterGroup.SIZE },
+      { code: 'airbags', label: '安全气囊', value: '6', unit: '个', group: CarParameterGroup.SAFETY },
+      { code: 'adas', label: '辅助驾驶', value: 'L2', group: CarParameterGroup.SAFETY },
+      { code: 'screen', label: '中控屏', value: '12.3', unit: '英寸', group: CarParameterGroup.SMART },
+      { code: 'ota', label: '整车 OTA', value: '支持', group: CarParameterGroup.SMART },
+    ],
+    configOptions: [],
+    updatedAt: '2026-10-27T00:00:00.000Z',
+  },
+  {
+    id: 'ty-ev-001',
+    name: '途越星驰',
+    series: '星驰系列',
+    energyType: EnergyType.ELECTRIC,
+    tagline: '安静而高效的城市出行',
+    thumbnailUrl: '/mock/cars/ty-ev-001.webp',
+    priceMinCents: 21_990_000,
+    priceMaxCents: 27_990_000,
+    publishStatus: PublishStatus.PUBLISHED,
+    galleryUrls: ['/mock/cars/ty-ev-001-1.webp', '/mock/cars/ty-ev-001-2.webp'],
+    images: [
+      { id: 'ty-ev-001-img-1', url: '/mock/cars/ty-ev-001-1.webp', isCover: true },
+      { id: 'ty-ev-001-img-2', url: '/mock/cars/ty-ev-001-2.webp', isCover: false },
+    ],
+    description: '纯电演示车型。',
+    parameters: [
+      { code: 'motor', label: '驱动电机', value: '后置单电机', group: CarParameterGroup.POWER },
+      { code: 'power', label: '最大功率', value: '200', unit: 'kW', group: CarParameterGroup.POWER },
+      {
+        code: 'torque',
+        label: '最大扭矩',
+        value: '360',
+        unit: 'N·m',
+        group: CarParameterGroup.POWER,
+      },
+      {
+        code: 'acceleration',
+        label: '零百加速',
+        value: '5.9',
+        unit: 's',
+        group: CarParameterGroup.POWER,
+      },
+      { code: 'range', label: 'CLTC 续航', value: '620', unit: 'km', group: CarParameterGroup.POWER },
+      { code: 'battery', label: '电池容量', value: '78.5', unit: 'kWh', group: CarParameterGroup.POWER },
+      { code: 'length', label: '车长', value: '4720', unit: 'mm', group: CarParameterGroup.SIZE },
+      {
+        code: 'wheelbase',
+        label: '轴距',
+        value: '2900',
+        unit: 'mm',
+        group: CarParameterGroup.SIZE,
+      },
+      { code: 'seats', label: '座位数', value: '5', unit: '座', group: CarParameterGroup.SIZE },
+      { code: 'airbags', label: '安全气囊', value: '8', unit: '个', group: CarParameterGroup.SAFETY },
+      { code: 'adas', label: '辅助驾驶', value: 'L2+', group: CarParameterGroup.SAFETY },
+      { code: 'screen', label: '中控屏', value: '15.6', unit: '英寸', group: CarParameterGroup.SMART },
+      { code: 'voice', label: '语音助手', value: '支持', group: CarParameterGroup.SMART },
+      { code: 'ota', label: '整车 OTA', value: '支持', group: CarParameterGroup.SMART },
+    ],
+    configOptions: [],
+    updatedAt: '2026-10-27T00:00:00.000Z',
+  },
+  {
+    id: 'ty-hybrid-001',
+    name: '途越云境',
+    series: '云境系列',
+    energyType: EnergyType.HYBRID,
+    tagline: '兼顾效率与远途续航',
+    thumbnailUrl: '/mock/cars/ty-hybrid-001.webp',
+    priceMinCents: 25_990_000,
+    priceMaxCents: 31_990_000,
+    publishStatus: PublishStatus.PUBLISHED,
+    galleryUrls: ['/mock/cars/ty-hybrid-001-1.webp'],
+    images: [{ id: 'ty-hybrid-001-img-1', url: '/mock/cars/ty-hybrid-001-1.webp', isCover: true }],
+    description: '混动演示车型。',
+    parameters: [
+      {
+        code: 'engine',
+        label: '发动机',
+        value: '1.5T 混动专用',
+        group: CarParameterGroup.POWER,
+      },
+      {
+        code: 'combinedRange',
+        label: '综合续航',
+        value: '1200',
+        unit: 'km',
+        group: CarParameterGroup.POWER,
+      },
+      { code: 'power', label: '最大功率', value: '160', unit: 'kW', group: CarParameterGroup.POWER },
+      {
+        code: 'acceleration',
+        label: '零百加速',
+        value: '7.2',
+        unit: 's',
+        group: CarParameterGroup.POWER,
+      },
+      { code: 'length', label: '车长', value: '4850', unit: 'mm', group: CarParameterGroup.SIZE },
+      {
+        code: 'wheelbase',
+        label: '轴距',
+        value: '2850',
+        unit: 'mm',
+        group: CarParameterGroup.SIZE,
+      },
+      { code: 'seats', label: '座位数', value: '6', unit: '座', group: CarParameterGroup.SIZE },
+      { code: 'airbags', label: '安全气囊', value: '6', unit: '个', group: CarParameterGroup.SAFETY },
+      { code: 'adas', label: '辅助驾驶', value: 'L2', group: CarParameterGroup.SAFETY },
+      { code: 'screen', label: '中控屏', value: '14.6', unit: '英寸', group: CarParameterGroup.SMART },
+      { code: 'ota', label: '整车 OTA', value: '支持', group: CarParameterGroup.SMART },
+    ],
+    configOptions: [],
+    updatedAt: '2026-10-27T00:00:00.000Z',
+  },
+  {
+    id: 'ty-mpv-001',
+    name: '途越瀚途',
+    series: '瀚途系列',
+    energyType: EnergyType.HYBRID,
+    tagline: '大空间多人出行的移动客厅',
+    thumbnailUrl: '/mock/cars/ty-mpv-001.webp',
+    priceMinCents: 27_990_000,
+    priceMaxCents: 34_990_000,
+    publishStatus: PublishStatus.PUBLISHED,
+    galleryUrls: ['/mock/cars/ty-mpv-001-1.webp'],
+    images: [{ id: 'ty-mpv-001-img-1', url: '/mock/cars/ty-mpv-001-1.webp', isCover: true }],
+    description: '七座 MPV 演示车型，用于验证 4 台上限与多车对比。',
+    parameters: [
+      { code: 'engine', label: '发动机', value: '2.0T 混动', group: CarParameterGroup.POWER },
+      {
+        code: 'combinedRange',
+        label: '综合续航',
+        value: '1100',
+        unit: 'km',
+        group: CarParameterGroup.POWER,
+      },
+      { code: 'power', label: '最大功率', value: '190', unit: 'kW', group: CarParameterGroup.POWER },
+      {
+        code: 'acceleration',
+        label: '零百加速',
+        value: '7.8',
+        unit: 's',
+        group: CarParameterGroup.POWER,
+      },
+      { code: 'length', label: '车长', value: '5150', unit: 'mm', group: CarParameterGroup.SIZE },
+      {
+        code: 'wheelbase',
+        label: '轴距',
+        value: '3050',
+        unit: 'mm',
+        group: CarParameterGroup.SIZE,
+      },
+      { code: 'seats', label: '座位数', value: '7', unit: '座', group: CarParameterGroup.SIZE },
+      { code: 'airbags', label: '安全气囊', value: '8', unit: '个', group: CarParameterGroup.SAFETY },
+      { code: 'adas', label: '辅助驾驶', value: 'L2+', group: CarParameterGroup.SAFETY },
+      { code: 'screen', label: '中控屏', value: '15.6', unit: '英寸', group: CarParameterGroup.SMART },
+      { code: 'voice', label: '语音助手', value: '支持', group: CarParameterGroup.SMART },
+      { code: 'ota', label: '整车 OTA', value: '支持', group: CarParameterGroup.SMART },
+    ],
+    configOptions: [],
+    updatedAt: '2026-10-27T00:00:00.000Z',
+  },
+  {
+    id: 'ty-legacy-001',
+    name: '途越启程',
+    series: '启程系列',
+    energyType: EnergyType.GASOLINE,
+    tagline: '已停售车型，仅后台可见',
+    thumbnailUrl: '/mock/cars/ty-legacy-001.webp',
+    priceMinCents: 12_990_000,
+    priceMaxCents: 15_990_000,
+    publishStatus: PublishStatus.OFFLINE,
+    galleryUrls: ['/mock/cars/ty-legacy-001-1.webp'],
+    images: [{ id: 'ty-legacy-001-img-1', url: '/mock/cars/ty-legacy-001-1.webp', isCover: true }],
+    description: '初始为已下线状态，用于验证「下架车型前台不可见」与「上架后重新出现」。',
+    parameters: [
+      { code: 'engine', label: '发动机', value: '1.5T 涡轮增压', group: CarParameterGroup.POWER },
+      { code: 'power', label: '最大功率', value: '130', unit: 'kW', group: CarParameterGroup.POWER },
+      { code: 'length', label: '车长', value: '4600', unit: 'mm', group: CarParameterGroup.SIZE },
+      { code: 'seats', label: '座位数', value: '5', unit: '座', group: CarParameterGroup.SIZE },
+    ],
+    configOptions: [],
+    updatedAt: '2026-09-30T00:00:00.000Z',
+  },
+];
+
+export const mockActivities: ActivityDto[] = [
+  {
+    id: 'activity-001',
+    name: '秋日探索季',
+    coverImageUrl: '/mock/activities/activity-001.webp',
+    startsAt: '2026-10-01T00:00:00.000Z',
+    endsAt: '2026-11-30T23:59:59.000Z',
+    summary: '用于联调的固定活动数据。',
+    published: true,
+  },
+];
+
+export const mockDealers: DealerDto[] = [
+  {
+    id: 'dealer-sh-001',
+    name: '途越上海体验中心',
+    address: '上海市示例路 100 号',
+    longitude: 121.4737,
+    latitude: 31.2304,
+    phone: '400-000-0001',
+    businessHours: '09:00-18:00',
+  },
+  {
+    id: 'dealer-bj-001',
+    name: '途越北京体验中心',
+    address: '北京市示例路 200 号',
+    longitude: 116.4074,
+    latitude: 39.9042,
+    phone: '400-000-0002',
+    businessHours: '09:00-18:00',
+  },
+];
+
+export const mockDashboardMetrics: DashboardMetrics = {
+  periodStart: '2026-10-27T00:00:00.000Z',
+  periodEnd: '2026-11-03T00:00:00.000Z',
+  totalVisits: 12_480,
+  aiUsageCount: 1_236,
+  comparisonCount: 842,
+  activityImpressions: 5_310,
+  popularCars: [
+    { carId: 'ty-suv-001', views: 3_120 },
+    { carId: 'ty-ev-001', views: 2_640 },
+    { carId: 'ty-hybrid-001', views: 1_850 },
+  ],
+};
+
+const rolePermissions: Record<AdminRole, AuthUser['permissions']> = {
+  editor: ['content:edit'],
+  reviewer: ['content:review', 'content:publish'],
+  super_admin: ['content:edit', 'content:review', 'content:publish', 'admin:manage'],
+};
+
+export const mockAdminUsers: AuthUser[] = Object.values(AdminRole).map((role, index) => ({
+  id: `mock-admin-${index + 1}`,
+  username: `mock_${role}`,
+  displayName: `Mock ${role}`,
+  role,
+  permissions: rolePermissions[role],
+}));
+
+export function findMockAdmin(role: AdminRole): AuthUser {
+  return mockAdminUsers.find((user) => user.role === role) ?? mockAdminUsers[0]!;
+}
