@@ -1,3 +1,4 @@
+import { CarParameterGroup } from '@tuyue/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiRequestError, carsApi, resolveAssetUrl } from '../src/api';
 
@@ -46,6 +47,28 @@ describe('admin cars API client', () => {
     ];
     expect(init.method).toBe('POST');
     expect(JSON.parse(String(init.body))).toMatchObject({ name: '途越星野' });
+  });
+
+  it('saves parameters as an ordered array', async () => {
+    stubFetch({ success: true, data: { id: 'car-1', parameters: [] }, requestId: 'r' });
+    const parameters = [
+      {
+        code: 'power',
+        label: '最大功率',
+        value: '185',
+        unit: 'kW',
+        group: CarParameterGroup.POWER,
+      },
+    ];
+    await carsApi.saveParameters('car-1', parameters);
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe('/api/v1/admin/cars/car-1/parameters');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(String(init.body))).toEqual({ parameters });
   });
 
   it('maps field details from a failed request', async () => {

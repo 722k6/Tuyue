@@ -1,9 +1,12 @@
 import { ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import {
+  CarReviewAction,
   CarStatusAction,
   PublishStatus,
   type AdminCarListItem,
   type CarDetail,
+  type CarReviewLog,
+  type CarReviewResponse,
   type CarStatusAuditLog,
   type CarStatusChangeResponse,
   type CarSummary,
@@ -17,6 +20,14 @@ export interface CarStatusChangeInput {
   action: string;
   actor?: string;
   reason?: string;
+}
+
+export interface CarReviewChangeInput {
+  carId: string;
+  /** 运行时可能是任意字符串，由仓库校验后再收窄。 */
+  action: string;
+  comment?: string;
+  actor?: string;
 }
 
 const DEFAULT_ACTOR = 'system';
@@ -46,6 +57,7 @@ function toSummary(car: CarDetail): CarSummary {
 export class CarRepository {
   private cars = new Map<string, CarDetail>();
   private logs: CarStatusAuditLog[] = [];
+  private reviewLogs: CarReviewLog[] = [];
 
   constructor(seed: readonly CarDetail[] = mockCars) {
     this.reset(seed);
@@ -54,6 +66,24 @@ export class CarRepository {
   reset(seed: readonly CarDetail[] = mockCars): void {
     this.cars = new Map(seed.map((car) => [car.id, structuredClone(car)]));
     this.logs = [];
+    this.reviewLogs = [];
+  }
+
+  /**
+   * 后台编辑写入后同步到本仓库，保证前台详情、对比和审核队列读到同一份数据。
+   * Mock 阶段存在两套内存 Store，合并会牵动已有责任线，因此这里用最小写入桥接。
+   */
+  upsert(car: CarDetail): void {
+    this.cars.set(car.id, structuredClone(car));
+  }
+
+  remove(carId: string): boolean {
+    const removed = this.cars.delete(carId);
+    if (removed) {
+      this.logs = this.logs.filter((log) => log.carId !== carId);
+      this.reviewLogs = this.reviewLogs.filter((log) => log.carId !== carId);
+    }
+    return removed;
   }
 
   /** 前台列表：强制只返回已上架车型（US-CAR-13 验收点）。 */
@@ -93,6 +123,97 @@ export class CarRepository {
       throw new NotFoundException({ code: 'CAR_NOT_FOUND', message: '车型不存在' });
     }
     return this.logs.filter((log) => log.carId === carId);
+  }
+
+  /** 审核队列：只列出待审核车型，按最近更新时间倒序。 */
+  listPendingReview(): AdminCarListItem[] {
+    return [...this.cars.values()]
+      .filter((car) => car.publishStatus === PublishStatus.PENDING_REVIEW)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .map((car) => this.describe(car));
+  }
+
+  listReviewLogs(carId: string): CarReviewLog[] {
+    if (!this.cars.has(carId)) {
+      throw new NotFoundException({ code: 'CAR_NOT_FOUND', message: '车型不存在' });
+    }
+    return this.reviewLogs.filter((log) => log.carId === carId);
+  }
+
+  /**
+   * 内容审核状态机（US-ADM-02）。
+   *
+   * 只负责「提交审核 / 通过 / 驳回」，不接管上下架：上架仍是 US-CAR-13 的动作。
+   * 驳回必须带意见，避免编辑收到一个没有任何修改线索的「已打回」。
+   */
+  changeReviewStatus(input: CarReviewChangeInput): CarReviewResponse {
+    if (!Object.values(CarReviewAction).includes(input.action as CarReviewAction)) {
+      throw new BadRequestException({
+        code: 'INVALID_REVIEW_ACTION',
+        message: `不支持的审核操作：${input.action}`,
+      });
+    }
+    const action = input.action as CarReviewAction;
+
+    const car = this.cars.get(input.carId);
+    if (!car) throw new NotFoundException({ code: 'CAR_NOT_FOUND', message: '车型不存在' });
+
+    const fromStatus = car.publishStatus;
+    const comment = input.comment?.trim() ?? '';
+    const actor = input.actor?.trim() || DEFAULT_ACTOR;
+
+    if (action === CarReviewAction.SUBMIT) {
+      if (fromStatus === PublishStatus.PUBLISHED) {
+        throw new ConflictException({
+          code: 'CAR_ALREADY_PUBLISHED',
+          message: '该车型已发布，无需再次提交审核',
+        });
+      }
+      if (fromStatus === PublishStatus.PENDING_REVIEW) {
+        throw new ConflictException({
+          code: 'CAR_ALREADY_IN_REVIEW',
+          message: '该车型已在待审核队列中',
+        });
+      }
+    } else {
+      if (fromStatus !== PublishStatus.PENDING_REVIEW) {
+        throw new ConflictException({
+          code: 'CAR_NOT_IN_REVIEW',
+          message: '该车型当前不在待审核状态',
+        });
+      }
+      if (action === CarReviewAction.REJECT && !comment) {
+        throw new BadRequestException({
+          code: 'REVIEW_COMMENT_REQUIRED',
+          message: '驳回时必须填写审核意见',
+        });
+      }
+    }
+
+    const toStatus =
+      action === CarReviewAction.SUBMIT
+        ? PublishStatus.PENDING_REVIEW
+        : action === CarReviewAction.APPROVE
+          ? PublishStatus.PUBLISHED
+          : PublishStatus.DRAFT;
+    const occurredAt = new Date().toISOString();
+    car.publishStatus = toStatus;
+    car.updatedAt = occurredAt;
+
+    const log: CarReviewLog = {
+      id: `review-log-${randomUUID()}`,
+      carId: car.id,
+      carName: car.name,
+      action,
+      fromStatus,
+      toStatus,
+      actor,
+      comment: comment || null,
+      occurredAt,
+    };
+    this.reviewLogs.unshift(log);
+
+    return { car: this.describe(car), log };
   }
 
   /**

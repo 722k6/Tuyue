@@ -54,6 +54,10 @@ pnpm dev:api      # http://localhost:3000/api
 - `GET /api/v1/dealers`
 - `GET /api/v1/admin/cars`（列表：分页、关键词、状态）
 - `POST /api/v1/admin/cars`、`PUT /api/v1/admin/cars/:id`、`DELETE /api/v1/admin/cars/:id`
+- `PUT /api/v1/admin/cars/:id/parameters`（按分组维护车型参数）
+- `GET /api/v1/admin/cars/review/pending`（待审核队列）
+- `POST /api/v1/admin/cars/:id/review`（提交审核 / 通过 / 驳回）
+- `GET /api/v1/admin/cars/:id/review-logs`（审核留痕）
 - `POST /api/v1/admin/cars/:id/images`（多图上传）、`PUT /api/v1/admin/cars/:id/images`（排序与主图）、`DELETE /api/v1/admin/cars/:id/images/:imageId`
 
 上传的图片写入 `apps/api/storage/uploads`（已加入 `.gitignore`），通过 `/static/uploads/<文件名>` 访问。车型字段与图片校验规则定义在 `packages/contracts`，后台表单与接口共用同一份校验函数。

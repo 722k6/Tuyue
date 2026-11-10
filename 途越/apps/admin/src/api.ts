@@ -6,10 +6,12 @@ import type {
   CarDraftInput,
   CarImage,
   CarImageInput,
+  CarParameter,
   CarSummary,
   LoginRequest,
   PaginatedResponse,
 } from '@tuyue/contracts';
+import { getAdminRole, getAdminUserHeader } from './features/admin-session';
 import { getAccessToken, notifyUnauthorized } from './session';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
@@ -26,11 +28,20 @@ export class ApiRequestError extends Error {
   }
 }
 
+/** 临时角色头：US-SYS-01 接入 Token 后删除。 */
+function sessionHeaders(): Record<string, string> {
+  const role = getAdminRole();
+  if (!role) return {};
+  return { 'x-admin-role': role, 'x-admin-user': getAdminUserHeader() };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   // 登录接口自身返回 401 表示密码错误，不能当成登录态失效
   const token = path === '/v1/auth/login' ? null : getAccessToken();
   if (token) headers.set('authorization', `Bearer ${token}`);
+  for (const [name, value] of Object.entries(sessionHeaders())) headers.set(name, value);
+
 
   let response: Response;
   try {
@@ -97,6 +108,13 @@ export const carsApi = {
   },
   remove(id: string): Promise<{ id: string }> {
     return request(`/v1/admin/cars/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+  saveParameters(id: string, parameters: CarParameter[]): Promise<CarDetail> {
+    return request(`/v1/admin/cars/${encodeURIComponent(id)}/parameters`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parameters }),
+    });
   },
   uploadImages(id: string, files: File[]): Promise<CarImage[]> {
     const body = new FormData();
