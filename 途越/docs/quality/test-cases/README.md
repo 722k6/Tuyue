@@ -6,8 +6,8 @@
 
 | 文件 | 用途 |
 | ---- | ---- |
-| `_模板.xlsx` | 老师格式的空表：`需求列表` + 5 个模块 sheet 的表头。复制一份，改名为 `测试用例-<你的名字>.xlsx` 再填 |
-| `测试用例-<姓名>.xlsx` | 个人提交件，只填自己负责的用户故事 |
+| `_模板.xlsx` | 老师格式的空表：`需求列表` + 5 个模块 sheet 的表头。复制一份，改名为 `测试用例及跟踪-<你的名字>.xlsx` 再填 |
+| `测试用例及跟踪-<姓名>.xlsx` | 个人提交件，只填自己负责的用户故事（已有：唐轩、糜昊廷） |
 | `US-<模块>-<编号>-<故事简称>.md` | 可选的详细记录（前置条件、缺陷分析），不替代 xlsx |
 
 ## xlsx 结构
@@ -63,7 +63,7 @@
 ```bash
 git checkout main && git pull
 git checkout -b feature/test-cases-<你的名字>
-cp docs/quality/test-cases/_模板.xlsx docs/quality/test-cases/测试用例-<你的名字>.xlsx
+cp docs/quality/test-cases/_模板.xlsx docs/quality/test-cases/测试用例及跟踪-<你的名字>.xlsx
 # 打开自己那份，只填负责的故事
 git add docs/quality/test-cases
 git commit -m "docs: 补充 US-XXX 测试用例"
