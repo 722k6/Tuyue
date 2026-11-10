@@ -48,7 +48,19 @@ const submittingId = ref<string | null>(null);
 const role = getAdminRole();
 const canSubmitReview = role === AdminRole.EDITOR || role === AdminRole.SUPER_ADMIN;
 
-const isEmpty = computed(() => !loading.value && cars.value.length === 0);
+// 记录「本次真正提交给接口」的筛选条件：输入框改了但还没点查询时，列表仍是上一次的结果，
+// 空态文案必须和当前这份数据保持一致，不能读取未生效的输入值。
+const appliedKeyword = ref('');
+const appliedStatus = ref('');
+const hasActiveFilter = computed(() => Boolean(appliedKeyword.value || appliedStatus.value));
+
+const emptyDescription = computed(() => {
+  // 只有「无筛选 + 总数 0」才是车型库真的为空；其余空态都是筛选或分页未命中
+  if (!hasActiveFilter.value && total.value === 0) {
+    return '暂无车型，点击右上角新增';
+  }
+  return '没有匹配的车型';
+});
 
 function formatWan(cents: number): string {
   return (cents / 1_000_000).toFixed(2);
@@ -60,15 +72,20 @@ function formatPriceRange(minCents: number, maxCents: number): string {
 
 async function load(): Promise<void> {
   loading.value = true;
+  const nextKeyword = keyword.value.trim();
+  const nextStatus = status.value;
   try {
     const result = await carsApi.list({
-      ...(keyword.value.trim() ? { keyword: keyword.value.trim() } : {}),
-      ...(status.value ? { status: status.value } : {}),
+      ...(nextKeyword ? { keyword: nextKeyword } : {}),
+      ...(nextStatus ? { status: nextStatus } : {}),
       page: page.value,
       pageSize: pageSize.value,
     });
     cars.value = result.items;
     total.value = result.total;
+    // 只在请求成功后更新：请求失败时列表仍是上一次的数据，筛选快照也保持旧值
+    appliedKeyword.value = nextKeyword;
+    appliedStatus.value = nextStatus;
   } catch (error) {
     ElMessage.error(error instanceof ApiRequestError ? error.message : '车型列表加载失败');
   } finally {
@@ -245,7 +262,7 @@ onMounted(load);
         </template>
       </el-table-column>
       <template #empty>
-        <el-empty :description="isEmpty ? '暂无车型，点击右上角新增' : '没有匹配的车型'" />
+        <el-empty v-if="!loading" :description="emptyDescription" />
       </template>
     </el-table>
 
