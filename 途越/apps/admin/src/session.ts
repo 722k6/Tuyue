@@ -4,6 +4,8 @@ const SESSION_KEY = 'tuyue.admin.session';
 /** US-CAR-13 的上下架留痕从该键读取操作人，登录成功后保持同步。 */
 const USERNAME_KEY = 'tuyue.admin.username';
 
+let unauthorizedHandler: (() => void) | null = null;
+
 export function saveSession(session: AuthResponse): void {
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   localStorage.setItem(USERNAME_KEY, session.user.username);
@@ -30,7 +32,21 @@ export function loadSession(): AuthResponse | null {
   }
 }
 
+export function getAccessToken(): string | null {
+  return loadSession()?.accessToken ?? null;
+}
+
 export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(USERNAME_KEY);
+}
+
+/** 由路由层注册「登录态失效后做什么」，session 模块不直接依赖 router。 */
+export function setUnauthorizedHandler(handler: () => void): void {
+  unauthorizedHandler = handler;
+}
+
+export function notifyUnauthorized(): void {
+  clearSession();
+  unauthorizedHandler?.();
 }
