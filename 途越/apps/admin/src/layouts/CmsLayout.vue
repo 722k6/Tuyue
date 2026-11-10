@@ -1,11 +1,22 @@
 <script setup lang="ts">
 import { AdminRole } from '@tuyue/contracts';
-import { getAdminRole, getAdminUsername } from '../features/admin-session';
+import { useRouter } from 'vue-router';
+import { getAdminRole } from '../features/admin-session';
+import { clearSession, loadSession } from '../session';
 
+const router = useRouter();
+const session = loadSession();
+const userLabel = session
+  ? `${session.user.displayName}（${session.user.username}）`
+  : '未登录';
 const role = getAdminRole();
-const username = getAdminUsername();
 const canReview = role === AdminRole.REVIEWER || role === AdminRole.SUPER_ADMIN;
 const isSuperAdmin = role === AdminRole.SUPER_ADMIN;
+
+function logout(): void {
+  clearSession();
+  void router.push('/login');
+}
 </script>
 
 <template>
@@ -22,8 +33,17 @@ const isSuperAdmin = role === AdminRole.SUPER_ADMIN;
         <el-menu-item v-if="isSuperAdmin" index="/admins"> 管理员 </el-menu-item>
       </el-menu> </el-aside
     ><el-container
-      ><el-header>最小工程基线 · {{ username }}（{{ role }}）</el-header
+      ><el-header class="topbar">
+        <span>{{ userLabel }}</span>
+        <el-button size="small" @click="logout">退出登录</el-button> </el-header
       ><el-main><RouterView /></el-main
     ></el-container>
   </el-container>
 </template>
+<style scoped>
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+</style>

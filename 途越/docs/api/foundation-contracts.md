@@ -8,12 +8,12 @@
 
 - 公共：`ApiResponse<T>`、`ApiError`、`PaginationQuery`、`PaginatedResponse<T>`、`SortDirection`
 - 车型：`CarSummary`、`CarDetail`、`CarImage`、`CarDraftInput`、`CarImageInput`、`CarParameter`、`CarConfigOption`、`EnergyType`、`PublishStatus`、`CAR_LIMITS`、`CAR_IMAGE_TYPES`、`validateCarDraft`、`normalizeCarImages`
-- 权限：`AdminRole`、`PermissionCode`、`MockLoginRequest`、`AuthUser`、`AuthResponse`
+- 权限：`AdminRole`、`PermissionCode`、`LoginRequest`、`MockLoginRequest`、`AuthUser`、`AuthResponse`
 - AI：`AiChatRequest`、`AiStreamEvent`、`AiRecommendation`
 - 对比选配：`CompareItem`、`CompareParameterRow`、`ConfigurationSelection`、`QuoteResult`
 - 运营：`ActivityDto`、`DealerDto`、`AnalyticsEvent`、`DashboardMetrics`
 
-角色固定为 `editor`、`reviewer`、`super_admin`。当前仅提供类型与 mock 登录，不实现鉴权守卫。
+角色固定为 `editor`、`reviewer`、`super_admin`。已提供账号密码登录并签发 JWT（US-SYS-01），后台路由守卫与登录态管理见 US-SYS-02；服务端接口鉴权守卫尚未实现。
 
 ## 接口列表
 
@@ -22,7 +22,8 @@
 | GET    | `/api/health`                            | 健康检查                   |
 | GET    | `/api/v1/cars`                           | 车型列表（**只含已上架**） |
 | GET    | `/api/v1/cars/:id`                       | 车型详情（**已下架返回 404**） |
-| POST   | `/api/v1/auth/mock-login`                | 固定角色 Mock 登录         |
+| POST   | `/api/v1/auth/login`                     | 账号密码登录，签发 JWT     |
+| POST   | `/api/v1/auth/mock-login`                | 固定角色 Mock 登录（兼容保留） |
 | GET    | `/api/v1/activities`                     | 活动 Mock 列表             |
 | GET    | `/api/v1/dealers`                        | 经销商 Mock 列表           |
 | GET    | `/api/v1/admin/cars`                     | 后台车型列表（含已下线、带留痕条数，US-CAR-13） |
@@ -142,6 +143,70 @@ Mock 数据集中在 `packages/test-utils/src/index.ts`，页面不得复制一�
 
 每次成功上架/下架写入一条 `CarStatusAuditLog`：`action`、`fromStatus`、`toStatus`、`actor`、`reason`、`occurredAt`。`actor` 目前由后台页面从 `localStorage['tuyue.admin.username']` 取，缺省 `web-admin`；**US-SYS-01 落地后应改为从 Token 解析**。
 
+## Sprint 3 增量（2026-11-05 · 糜昊廷 · US-SYS-01 后台登录）
+
+新增账号密码登录，成功返回 JWT。`mock-login` 暂时保留，US-SYS-02 接入守卫后再评估下线。
+
+### `POST /api/v1/auth/login`
+
+请求体（`LoginRequest`）：
+
+```json
+{ "username": "admin", "password": "Admin@123" }
+```
+
+成功 `200`，`data` 为 `AuthResponse`：
+
+```json
+{
+  "accessToken": "<JWT>",
+  "user": { "id": "admin-1", "username": "admin", "displayName": "超级管理员", "role": "super_admin", "permissions": ["content:edit", "content:review", "content:publish", "admin:manage"] },
+  "expiresAt": "2026-11-05T10:00:00.000Z"
+}
+```
+
+JWT payload 至少包含 `sub`（用户 ID）、`username`、`role`、`iat`、`exp`（默认有效期 2 小时）。US-SYS-02 的守卫直接复用这份 payload，不再查库。
+
+### 演示账号
+
+账号为内存种子（`apps/api/src/auth/accounts.ts`），密码用 BCrypt 哈希存储：
+
+| 账号     | 密码         | 角色          |
+| -------- | ------------ | ------------- |
+| admin    | `Admin@123`  | `super_admin` |
+| editor   | `Editor@123` | `editor`      |
+| reviewer | `Reviewer@123` | `reviewer`  |
+
+### 新增错误码
+
+| code                      | HTTP | 场景                               |
+| ------------------------- | ---- | ---------------------------------- |
+| `AUTH_INPUT_REQUIRED`     | 400  | 账号或密码为空                     |
+| `AUTH_INVALID_CREDENTIALS` | 401 | 账号不存在或密码错误（两者返回同一错误，防止账号枚举） |
+
+### 环境变量
+
+| 变量                     | 默认值                        | 说明                                   |
+| ------------------------ | ----------------------------- | -------------------------------------- |
+| `JWT_SECRET`             | `tuyue-dev-secret-change-me`  | 签名密钥，共享环境必须覆盖             |
+| `JWT_EXPIRES_IN_SECONDS` | `7200`                        | Token 有效期（秒），非法值回退到默认值 |
+
+### 前端约定
+
+登录成功后写入 `localStorage`：`tuyue.admin.session`（完整 `AuthResponse` JSON）与 `tuyue.admin.username`（供 US-CAR-13 的留痕使用）。请求头注入与 401 跳转见 US-SYS-02。
+
+## Sprint 3 增量（2026-11-05 · 糜昊廷 · US-SYS-02 登录态与路由守卫）
+
+前端登录态统一走 `apps/admin/src/session.ts`：
+
+- `loadSession()` 读取 `tuyue.admin.session`；`expiresAt` 已过期、JSON 损坏或字段缺失时返回 `null` 并清除残留。
+- 业务请求自动携带 `Authorization: Bearer <accessToken>`；登录接口本身例外（它的 401 表示密码错误）。
+- 任意业务接口返回 `401` 时清除本地登录态，跳到 `/login?redirect=<当前地址>`；登录成功后回跳原页面（仅接受以 `/` 开头的站内路径）。
+- 路由守卫：`meta.requiresAuth` 的页面未登录时跳登录页；`meta.roles` 不匹配（如 editor 访问超管页）回 `/dashboard`；已登录访问 `/login` 直接回 `/dashboard`。
+- 退出登录：后台顶栏按钮清除 session 并回登录页。
+
+服务端尚未校验 Token，管理接口仍可被匿名调用，等后续鉴权守卫任务补齐。
+
 ## Sprint 3 增量（2026-11-05 · 唐轩 · US-CAR-12）
 
 本节只新增能力，没有删除或改名既有字段。
@@ -225,8 +290,8 @@ Mock 数据集中在 `packages/test-utils/src/index.ts`，页面不得复制一�
 
 ### 角色临时适配
 
-- 后台登录页把角色和用户名写入 `localStorage` 的 `tuyue.admin.role` / `tuyue.admin.username`。
-- 后台请求统一携带 `x-admin-role` / `x-admin-user` 请求头。
+- 后台登录页把完整会话写入 `tuyue.admin.session`，角色与用户名从会话中解析（US-SYS-02）。
+- 后台请求统一携带 `x-admin-role` / `x-admin-user` 请求头，取值同样来自会话。
 - `submit` 需要 `content:edit`（editor、super_admin）；`approve` / `reject` 需要 `content:review`（reviewer、super_admin）。
 - 编辑角色不能在车型表单里把未发布车型改成 `published`，否则返回 403；已发布车型继续编辑文案不受限制。
 - 后台路由 `/reviews` 仅对 reviewer、super_admin 开放；编辑角色可访问的菜单不显示「内容审核」。

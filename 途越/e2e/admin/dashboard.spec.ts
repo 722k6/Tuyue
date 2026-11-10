@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { loginAs } from '../support/admin-session';
 import { waitForApiReady } from '../support/wait-for-api';
 
 interface DashboardPayload {
@@ -17,11 +18,8 @@ const EXPECTED_KPI_LABELS = ['总访问量', 'AI 使用次数', '车型对比次
 test.describe('CMS 数据看板', () => {
   test.beforeEach(async ({ page, request }) => {
     await waitForApiReady(request);
-    // 后台路由守卫要求本地登录态，E2E 直接注入超管角色
-    await page.addInitScript(() => {
-      window.localStorage.setItem('tuyue.admin.role', 'super_admin');
-      window.localStorage.setItem('tuyue.admin.username', 'e2e');
-    });
+    // US-SYS-02 起后台路由需要登录态
+    await loginAs(page);
   });
 
   test('渲染 4 个 KPI 与热门车型列表', async ({ page }) => {
