@@ -1,0 +1,97 @@
+// @vitest-environment jsdom
+
+import { flushPromises, mount } from '@vue/test-utils';
+import { BodyStyle, EnergyType, PublishStatus, type CarSummary } from '@tuyue/contracts';
+import { createMemoryHistory, createRouter } from 'vue-router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import CarsPage from '../src/pages/CarsPage.vue';
+
+const { carsMock } = vi.hoisted(() => ({ carsMock: vi.fn() }));
+
+vi.mock('../src/api', () => ({
+  webApi: { cars: carsMock },
+}));
+
+const car: CarSummary = {
+  id: 'ty-ev-001',
+  name: '途越星驰',
+  series: '星驰系列',
+  energyType: EnergyType.ELECTRIC,
+  bodyStyle: BodyStyle.SEDAN,
+  aliases: ['星驰 EV'],
+  tagline: '安静而高效的城市出行',
+  thumbnailUrl: '/mock/cars/ty-ev-001.webp',
+  priceMinCents: 21_990_000,
+  priceMaxCents: 27_990_000,
+  popularityScore: 88,
+  publishStatus: PublishStatus.PUBLISHED,
+};
+
+async function mountPage(path = '/cars') {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/cars', component: CarsPage },
+      { path: '/cars/:id', component: { template: '<div />' } },
+    ],
+  });
+  await router.push(path);
+  await router.isReady();
+  const wrapper = mount(CarsPage, { global: { plugins: [router] } });
+  await flushPromises();
+  return { router, wrapper };
+}
+
+describe('CarsPage filtering and search', () => {
+  beforeEach(() => {
+    carsMock.mockReset();
+    carsMock.mockResolvedValue({ success: true, data: [car], requestId: 'req-cars' });
+  });
+
+  it('restores URL conditions and sends them to the API', async () => {
+    const { wrapper } = await mountPage(
+      '/cars?keyword=620&energyType=electric&bodyStyle=sedan&minPrice=20&maxPrice=25&sort=price-asc',
+    );
+
+    expect(carsMock).toHaveBeenCalledWith({
+      keyword: '620',
+      energyType: 'electric',
+      bodyStyle: 'sedan',
+      minPriceCents: 20_000_000,
+      maxPriceCents: 25_000_000,
+      sortBy: 'price',
+      sortDirection: 'asc',
+    });
+    expect(wrapper.get('input[name="keyword"]').element).toHaveProperty('value', '620');
+    expect(wrapper.text()).toContain('“620”共找到 1 款车型');
+    expect(wrapper.text()).toContain('途越星驰');
+  });
+
+  it('writes submitted search and filter conditions into the URL', async () => {
+    const { router, wrapper } = await mountPage();
+    await wrapper.get('input[name="keyword"]').setValue('星驰');
+    await wrapper.get('select[name="energyType"]').setValue('electric');
+    await wrapper.get('select[name="sort"]').setValue('popularity-desc');
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+
+    expect(router.currentRoute.value.query).toMatchObject({
+      keyword: '星驰',
+      energyType: 'electric',
+      sort: 'popularity-desc',
+    });
+    expect(carsMock).toHaveBeenLastCalledWith({
+      keyword: '星驰',
+      energyType: 'electric',
+      sortBy: 'popularity',
+      sortDirection: 'desc',
+    });
+  });
+
+  it('shows guidance when keyword search has no result', async () => {
+    carsMock.mockResolvedValue({ success: true, data: [], requestId: 'req-empty' });
+    const { wrapper } = await mountPage('/cars?keyword=不存在');
+    expect(wrapper.text()).toContain('没有找到匹配车型');
+    expect(wrapper.text()).toContain('请尝试缩短关键词');
+  });
+});

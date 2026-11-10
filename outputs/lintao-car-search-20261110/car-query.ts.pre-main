@@ -1,0 +1,133 @@
+import { BadRequestException } from '@nestjs/common';
+import {
+  BodyStyle,
+  CarSortField,
+  EnergyType,
+  PublishStatus,
+  SortDirection,
+  type CarDetail,
+  type CarListQuery,
+  type CarSummary,
+} from '@tuyue/contracts';
+
+const MAX_KEYWORD_LENGTH = 80;
+
+function invalidQuery(message: string): never {
+  throw new BadRequestException({ code: 'INVALID_CAR_QUERY', message });
+}
+
+function readSingleValue(raw: unknown, field: string): string | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'string') invalidQuery(`${field} 只能传入一个字符串值`);
+  return raw.trim();
+}
+
+function readEnum<T extends string>(
+  raw: unknown,
+  field: string,
+  allowedValues: readonly T[],
+): T | undefined {
+  const value = readSingleValue(raw, field);
+  if (!value) return undefined;
+  if (!allowedValues.includes(value as T)) {
+    invalidQuery(`${field} 可选值为 ${allowedValues.join(', ')}`);
+  }
+  return value as T;
+}
+
+function readCents(raw: unknown, field: string): number | undefined {
+  const value = readSingleValue(raw, field);
+  if (!value) return undefined;
+  if (!/^\d+$/.test(value)) invalidQuery(`${field} 必须是非负整数（单位：分）`);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) invalidQuery(`${field} 超出安全整数范围`);
+  return parsed;
+}
+
+export function parseCarListQuery(raw: Record<string, unknown>): CarListQuery {
+  const query: CarListQuery = {};
+  const keyword = readSingleValue(raw.keyword, 'keyword');
+  if (keyword) {
+    if (keyword.length > MAX_KEYWORD_LENGTH) {
+      invalidQuery(`keyword 最长 ${MAX_KEYWORD_LENGTH} 个字符`);
+    }
+    query.keyword = keyword;
+  }
+
+  const energyType = readEnum(raw.energyType, 'energyType', Object.values(EnergyType));
+  const bodyStyle = readEnum(raw.bodyStyle, 'bodyStyle', Object.values(BodyStyle));
+  const sortBy = readEnum(raw.sortBy, 'sortBy', Object.values(CarSortField));
+  const sortDirection = readEnum(raw.sortDirection, 'sortDirection', Object.values(SortDirection));
+  const minPriceCents = readCents(raw.minPriceCents, 'minPriceCents');
+  const maxPriceCents = readCents(raw.maxPriceCents, 'maxPriceCents');
+
+  if (minPriceCents !== undefined && maxPriceCents !== undefined && minPriceCents > maxPriceCents) {
+    invalidQuery('minPriceCents 不能大于 maxPriceCents');
+  }
+
+  if (energyType) query.energyType = energyType;
+  if (bodyStyle) query.bodyStyle = bodyStyle;
+  if (sortBy) query.sortBy = sortBy;
+  if (sortDirection) query.sortDirection = sortDirection;
+  if (minPriceCents !== undefined) query.minPriceCents = minPriceCents;
+  if (maxPriceCents !== undefined) query.maxPriceCents = maxPriceCents;
+  return query;
+}
+
+function containsKeyword(car: CarDetail, keyword: string): boolean {
+  const parameterKeywords = car.parameters.flatMap((parameter) => [
+    parameter.code,
+    parameter.label,
+    parameter.value,
+    parameter.unit ?? '',
+  ]);
+  const searchableText = [car.name, ...(car.aliases ?? []), ...parameterKeywords]
+    .join(' ')
+    .toLocaleLowerCase('zh-CN');
+  return searchableText.includes(keyword.toLocaleLowerCase('zh-CN'));
+}
+
+function toSummary(car: CarDetail): CarSummary {
+  return {
+    id: car.id,
+    name: car.name,
+    series: car.series,
+    energyType: car.energyType,
+    ...(car.bodyStyle ? { bodyStyle: car.bodyStyle } : {}),
+    ...(car.aliases ? { aliases: car.aliases } : {}),
+    tagline: car.tagline,
+    thumbnailUrl: car.thumbnailUrl,
+    priceMinCents: car.priceMinCents,
+    priceMaxCents: car.priceMaxCents,
+    ...(car.popularityScore !== undefined ? { popularityScore: car.popularityScore } : {}),
+    publishStatus: car.publishStatus,
+  };
+}
+
+export function queryCars(cars: readonly CarDetail[], query: CarListQuery): CarSummary[] {
+  const filtered = cars.filter((car) => {
+    if (car.publishStatus !== PublishStatus.PUBLISHED) return false;
+    if (query.keyword && !containsKeyword(car, query.keyword)) return false;
+    if (query.energyType && car.energyType !== query.energyType) return false;
+    if (query.bodyStyle && car.bodyStyle !== query.bodyStyle) return false;
+    if (query.minPriceCents !== undefined && car.priceMaxCents < query.minPriceCents) return false;
+    if (query.maxPriceCents !== undefined && car.priceMinCents > query.maxPriceCents) return false;
+    return true;
+  });
+
+  if (query.sortBy) {
+    const direction =
+      query.sortDirection ??
+      (query.sortBy === CarSortField.POPULARITY ? SortDirection.DESC : SortDirection.ASC);
+    const factor = direction === SortDirection.ASC ? 1 : -1;
+    filtered.sort((left, right) => {
+      const leftValue =
+        query.sortBy === CarSortField.PRICE ? left.priceMinCents : (left.popularityScore ?? 0);
+      const rightValue =
+        query.sortBy === CarSortField.PRICE ? right.priceMinCents : (right.popularityScore ?? 0);
+      return (leftValue - rightValue) * factor || left.id.localeCompare(right.id);
+    });
+  }
+
+  return filtered.map(toSummary);
+}
