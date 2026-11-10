@@ -4,6 +4,7 @@ import { AuthService } from './auth/auth.service.js';
 import { CarStore } from './cars/car-store.js';
 import { CarsAdminController } from './cars/cars-admin.controller.js';
 import { AdminCarsController } from './car-status.controller.js';
+import { CarReviewController } from './car-review.controller.js';
 import { CompareController } from './compare.controller.js';
 import { RequestIdMiddleware } from './common.js';
 import {
@@ -24,6 +25,7 @@ import {
     DealersController,
     AnalyticsController,
     AdminCarsController,
+    CarReviewController,
     CompareController,
   ],
   providers: [CarStore, AuthService],

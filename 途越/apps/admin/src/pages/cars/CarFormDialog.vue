@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus';
 import {
+  AdminRole,
   CAR_LIMITS,
   EnergyType,
   PublishStatus,
@@ -9,6 +10,7 @@ import {
 } from '@tuyue/contracts';
 import { computed, reactive, ref, watch } from 'vue';
 import { ApiRequestError, carsApi } from '../../api';
+import { getAdminRole } from '../../features/admin-session';
 
 const props = defineProps<{ modelValue: boolean; carId: string | null }>();
 const emit = defineEmits<{ 'update:modelValue': [boolean]; saved: [] }>();
@@ -20,12 +22,14 @@ const energyOptions = [
   { value: EnergyType.HYBRID, label: '混动' },
   { value: EnergyType.ELECTRIC, label: '纯电' },
 ];
-const statusOptions = [
+const allStatusOptions = [
   { value: PublishStatus.DRAFT, label: '草稿' },
   { value: PublishStatus.PENDING_REVIEW, label: '待审核' },
   { value: PublishStatus.PUBLISHED, label: '已发布' },
   { value: PublishStatus.OFFLINE, label: '已下线' },
 ];
+const role = getAdminRole();
+const canPublishDirectly = role !== AdminRole.EDITOR;
 
 function emptyDraft(): CarDraftInput {
   return {
@@ -41,6 +45,16 @@ function emptyDraft(): CarDraftInput {
 }
 
 const draft = reactive<CarDraftInput>(emptyDraft());
+/** 编辑角色不能把未发布车型直接改成已发布；已发布车型保持原状态继续编辑不受影响。 */
+const statusOptions = computed(() =>
+  allStatusOptions.map((item) => ({
+    ...item,
+    disabled:
+      !canPublishDirectly &&
+      item.value === PublishStatus.PUBLISHED &&
+      draft.publishStatus !== PublishStatus.PUBLISHED,
+  })),
+);
 const minWan = ref(0);
 const maxWan = ref(0);
 const errors = reactive<Record<string, string>>({});
@@ -214,8 +228,12 @@ async function submit(): Promise<void> {
             :key="item.value"
             :label="item.label"
             :value="item.value"
+            :disabled="item.disabled"
           />
         </el-select>
+        <p v-if="!canPublishDirectly" class="status-hint">
+          编辑角色不能直接发布，请保存后到车型列表提交审核。
+        </p>
       </el-form-item>
     </el-form>
     <template #footer>
@@ -237,5 +255,11 @@ async function submit(): Promise<void> {
 .price-unit {
   color: var(--el-text-color-secondary);
   font-size: 13px;
+}
+.status-hint {
+  margin: 4px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.4;
 }
 </style>

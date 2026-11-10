@@ -194,3 +194,110 @@ JWT payload 至少包含 `sub`（用户 ID）、`username`、`role`、`iat`、`e
 ### 前端约定
 
 登录成功后写入 `localStorage`：`tuyue.admin.session`（完整 `AuthResponse` JSON）与 `tuyue.admin.username`（供 US-CAR-13 的留痕使用）。请求头注入与 401 跳转在 US-SYS-02 实现。
+
+## Sprint 3 增量（2026-11-05 · 唐轩 · US-CAR-12）
+
+本节只新增能力，没有删除或改名既有字段。
+
+### 新增接口
+
+| 方法 | 路径                                     | 用途                         |
+| ---- | ---------------------------------------- | ---------------------------- |
+| PUT  | `/api/v1/admin/cars/:id/parameters`      | 整体覆盖保存车型参数（后台） |
+
+请求体：
+
+```json
+{
+  "parameters": [
+    { "code": "power", "label": "最大功率", "value": "185", "unit": "kW", "group": "power" }
+  ]
+}
+```
+
+成功后返回更新后的 `CarDetail`。参数由前端提交完整数组，服务端整体覆盖，不做增量合并。
+
+### 参数规则
+
+- `code` 必填、trim 后不能为空、不区分大小写唯一，最长 40 字符。
+- `label` 必填，最长 20 字符；`value` 必填，最长 40 字符；`unit` 可选，最长 12 字符。
+- `group` 可选；缺省时服务端补为 `other`。允许值固定为 `power` / `size` / `safety` / `smart` / `other`。
+- 每个车型最多 60 条参数。
+- 校验函数为 `packages/contracts` 的 `validateCarParameters`，后台表单与接口共用同一份规则。
+- 参数模板尚未确认，因此本次不固化字段清单，只保证分组、代码唯一和缺失值约定。
+
+### 新增错误码
+
+| code                    | HTTP | 含义                                   |
+| ----------------------- | ---- | -------------------------------------- |
+| `CAR_PARAMETER_INVALID` | 400  | 参数校验失败，`details` 为字段级错误列表 |
+
+### 数据同步
+
+后台编辑使用 `CarStore`，前台详情、对比与审核队列使用 `carRepository`。本次新增最小同步桥：
+
+- 后台新增、编辑、删除车型，保存图片和参数后，同步写入 `carRepository`。
+- 删除车型时同时移除该车型的状态留痕。
+- 不合并两个内存 Store，避免影响已有责任线；后续接入真实数据库时应统一为一个数据源。
+
+### 展示约定
+
+- 后台参数编辑按「动力 → 尺寸 → 安全 → 智能 → 其他」分组展示与保存。
+- 前端提交时保持分组顺序与组内顺序；服务端按提交顺序原样保存。
+- 对比矩阵继续按 `group` 分组，未分组数据仍由 `code` 关键字兜底归类。
+
+## Sprint 3 增量（2026-11-05 · 唐轩 · US-ADM-02）
+
+本节只新增审核能力，不改变 US-CAR-13 的上下架语义。
+
+### 新增接口
+
+| 方法 | 路径                                  | 用途                         |
+| ---- | ------------------------------------- | ---------------------------- |
+| GET  | `/api/v1/admin/cars/review/pending`   | 待审核队列（按更新时间倒序） |
+| POST | `/api/v1/admin/cars/:id/review`       | 提交审核 / 通过 / 驳回       |
+| GET  | `/api/v1/admin/cars/:id/review-logs`  | 审核留痕（时间倒序）         |
+
+审核请求体：
+
+```json
+{ "action": "submit", "comment": "参数与配置已核对", "actor": "唐轩" }
+```
+
+`action` 取值 `submit` / `approve` / `reject`。`comment` 在驳回时必填；`actor` 缺省时优先取请求头 `x-admin-user`，再缺省为 `system`。
+
+### 审核状态机
+
+| 动作    | 允许的起始状态        | 目标状态         | 非法状态                     |
+| ------- | --------------------- | ---------------- | ---------------------------- |
+| submit  | `draft` / `offline`   | `pending_review` | 待审核 409 / 已发布 409      |
+| approve | `pending_review`      | `published`      | 其他状态 409                 |
+| reject  | `pending_review`      | `draft`          | 其他状态 409；无意见 400     |
+
+审核通过后立即出现在前台 `GET /api/v1/cars`；驳回回到草稿，不自动下架已发布车型。上下架仍走 `POST /api/v1/admin/cars/:id/status`。
+
+### 角色临时适配
+
+- 后台登录页把角色和用户名写入 `localStorage` 的 `tuyue.admin.role` / `tuyue.admin.username`。
+- 后台请求统一携带 `x-admin-role` / `x-admin-user` 请求头。
+- `submit` 需要 `content:edit`（editor、super_admin）；`approve` / `reject` 需要 `content:review`（reviewer、super_admin）。
+- 编辑角色不能在车型表单里把未发布车型改成 `published`，否则返回 403；已发布车型继续编辑文案不受限制。
+- 后台路由 `/reviews` 仅对 reviewer、super_admin 开放；编辑角色可访问的菜单不显示「内容审核」。
+- 以上均为 US-SYS-01 落地前的临时适配，接入真实 Token 后应删除本地角色读取和请求头。
+
+### 新增错误码
+
+| code                     | HTTP | 含义                               |
+| ------------------------ | ---- | ---------------------------------- |
+| `INVALID_REVIEW_ACTION`  | 400  | 审核动作不是 submit/approve/reject |
+| `CAR_ALREADY_IN_REVIEW`  | 409  | 重复提交审核                       |
+| `CAR_NOT_IN_REVIEW`      | 409  | 对非待审核车型执行通过或驳回       |
+| `REVIEW_COMMENT_REQUIRED`| 400  | 驳回未填写审核意见                 |
+| `ROLE_REQUIRED`          | 400  | 缺少或无效的 `x-admin-role`        |
+| `FORBIDDEN_ROLE`         | 403  | 当前角色无权执行该操作             |
+
+`CAR_ALREADY_PUBLISHED` 复用 US-CAR-13 的定义：已发布车型重复提交审核返回 409。
+
+### 审核留痕
+
+每次成功操作写入一条 `CarReviewLog`：`action`、`fromStatus`、`toStatus`、`actor`、`comment`、`occurredAt`。审核留痕与上下架留痕分开保存，避免两类操作混在一起难以追溯。

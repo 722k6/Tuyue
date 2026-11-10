@@ -1,12 +1,16 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   CAR_LIMITS,
+  CarParameterGroup,
+  PublishStatus,
   normalizeCarImages,
   validateCarDraft,
+  validateCarParameters,
   type CarDetail,
   type CarDraftInput,
   type CarImage,
   type CarImageInput,
+  type CarParameter,
   type CarSummary,
   type PaginatedResponse,
 } from '@tuyue/contracts';
@@ -146,6 +150,48 @@ export class CarStore {
       priceMaxCents: input.priceMaxCents,
       publishStatus: input.publishStatus,
       description: input.description.trim(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.cars.set(id, updated);
+    return cloneCar(updated);
+  }
+
+  setParameters(id: string, parameters: readonly CarParameter[]): CarDetail | null {
+    const car = this.cars.get(id);
+    if (!car) return null;
+
+    const errors = validateCarParameters([...parameters]);
+    if (errors.length > 0) {
+      throw new BadRequestException({
+        code: 'CAR_PARAMETER_INVALID',
+        message: errors[0]?.message ?? '车型参数校验未通过',
+        details: errors,
+      });
+    }
+
+    const normalized: CarParameter[] = parameters.map((parameter) => ({
+      code: parameter.code.trim(),
+      label: parameter.label.trim(),
+      value: parameter.value.trim(),
+      ...(parameter.unit?.trim() ? { unit: parameter.unit.trim() } : {}),
+      group: parameter.group ?? CarParameterGroup.OTHER,
+    }));
+    const updated: CarDetail = {
+      ...car,
+      parameters: normalized,
+      updatedAt: new Date().toISOString(),
+    };
+    this.cars.set(id, updated);
+    return cloneCar(updated);
+  }
+
+  /** 审核流转后把状态回写到编辑侧 Store，避免两个内存数据源显示的发布状态不一致。 */
+  patchStatus(id: string, status: PublishStatus): CarDetail | null {
+    const car = this.cars.get(id);
+    if (!car) return null;
+    const updated: CarDetail = {
+      ...car,
+      publishStatus: status,
       updatedAt: new Date().toISOString(),
     };
     this.cars.set(id, updated);
