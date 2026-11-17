@@ -11,6 +11,9 @@ describe('central mock data', () => {
       'ty-legacy-001',
     ]);
     expect(new Set(mockCars.map((car) => car.energyType)).size).toBeGreaterThanOrEqual(2);
+    expect(new Set(mockCars.map((car) => car.bodyStyle))).toEqual(new Set(['suv', 'sedan', 'mpv']));
+    expect(mockCars.every((car) => (car.aliases?.length ?? 0) > 0)).toBe(true);
+    expect(mockCars.every((car) => (car.popularityScore ?? 0) > 0)).toBe(true);
     expect(mockDealers).toHaveLength(2);
     expect(mockAdminUsers.map((user) => user.role)).toEqual(['editor', 'reviewer', 'super_admin']);
   });

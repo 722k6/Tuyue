@@ -1,0 +1,33 @@
+林涛任务变更摘要（US-CAR-03 / US-SRC-01）
+===========================================
+
+分支与基线
+- 当前分支：BrenL（未新建分支）
+- 本地同步基线：b421df9（包含测试用例模板）
+- 同步方式：git merge --ff-only main（只使用本地 main，未从 GitHub 拉取）
+
+接口与字段
+- 新增共享契约：BodyStyle、CarCatalogSort、CarCatalogQuery。
+- CarSummary 新增向后兼容可选字段：bodyStyle、aliases、popularityScore。
+- GET /api/v1/cars 新增 keyword、energyType、bodyStyle、minPriceCents、maxPriceCents、sortBy、sortDirection。
+- 关键词匹配车型名称、别名和参数 code/名称/值/单位。
+- 价格筛选使用区间相交语义；价格默认升序，热度默认降序。
+- 非法查询返回 400 INVALID_CAR_QUERY；后端仍强制只返回 published 车型。
+
+官网
+- /cars 增加关键词、能源、车身、最低/最高价和排序控件。
+- 条件同步到 URL；刷新、前进后退及分享链接后可恢复。
+- 搜索结果复用原车型卡片和 CompareToggle；无结果显示调整条件引导。
+
+测试目录（按 docs/quality/e2e-testing.md）
+- 接口测试：途越/apps/api/test/car-catalog-query.spec.ts
+- 前端 API 单测：途越/apps/web/test/car-catalog.api.spec.ts
+- 浏览器 E2E：途越/e2e/web/car-discovery.spec.ts
+- 测试用例：途越/docs/quality/test-cases/US-CAR-03-筛选与排序.md
+- 测试用例：途越/docs/quality/test-cases/US-SRC-01-关键词搜索.md
+- 测试执行报告：未生成，继续等待单独的 test-records 模板或用户指示。
+
+变更补丁
+- MODIFIED_FILE：E:\Github源码\Tuyue\outputs\lintao-car-search-20261110\MODIFIED_FILE.patch
+- SHA-256：D58AD7956917477E95EF5A0E931DF0B129B426392F9B0F6E3AC4B786547F573B
+- 原文件哈希清单：E:\Github源码\Tuyue\outputs\lintao-car-search-20261110\original-main-hashes.json

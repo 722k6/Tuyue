@@ -4,6 +4,7 @@ import {
   CarStatusAction,
   PublishStatus,
   type AdminCarListItem,
+  type CarCatalogQuery,
   type CarDetail,
   type CarReviewLog,
   type CarReviewResponse,
@@ -13,6 +14,7 @@ import {
 } from '@tuyue/contracts';
 import { mockCars } from '@tuyue/test-utils';
 import { randomUUID } from 'node:crypto';
+import { selectPublishedCars } from './car-catalog-query.js';
 
 export interface CarStatusChangeInput {
   carId: string;
@@ -38,10 +40,13 @@ function toSummary(car: CarDetail): CarSummary {
     name: car.name,
     series: car.series,
     energyType: car.energyType,
+    ...(car.bodyStyle ? { bodyStyle: car.bodyStyle } : {}),
+    ...(car.aliases ? { aliases: [...car.aliases] } : {}),
     tagline: car.tagline,
     thumbnailUrl: car.thumbnailUrl,
     priceMinCents: car.priceMinCents,
     priceMaxCents: car.priceMaxCents,
+    ...(car.popularityScore !== undefined ? { popularityScore: car.popularityScore } : {}),
     publishStatus: car.publishStatus,
   };
 }
@@ -87,10 +92,8 @@ export class CarRepository {
   }
 
   /** 前台列表：强制只返回已上架车型（US-CAR-13 验收点）。 */
-  listPublished(): CarSummary[] {
-    return [...this.cars.values()]
-      .filter((car) => car.publishStatus === PublishStatus.PUBLISHED)
-      .map(toSummary);
+  listPublished(query: CarCatalogQuery = {}): CarSummary[] {
+    return selectPublishedCars([...this.cars.values()], query).map(toSummary);
   }
 
   /** 后台列表：包含草稿与已下线车型，附留痕条数。 */

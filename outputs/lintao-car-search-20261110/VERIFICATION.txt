@@ -1,0 +1,51 @@
+林涛任务验证记录（US-CAR-03 / US-SRC-01）
+===========================================
+
+四个交付路径
+1. MODIFIED_FILE：E:\Github源码\Tuyue\outputs\lintao-car-search-20261110\MODIFIED_FILE.patch
+2. DIFF_FILE：E:\Github源码\Tuyue\outputs\lintao-car-search-20261110\DIFF_FILE.txt
+3. VERIFICATION：E:\Github源码\Tuyue\outputs\lintao-car-search-20261110\VERIFICATION.txt
+4. ROLLBACK：E:\Github源码\Tuyue\outputs\lintao-car-search-20261110\ROLLBACK.sh
+
+分支与字段
+- 当前分支：BrenL；没有新建分支；已用本地 main 快进同步到 b421df9。
+- 新字段：bodyStyle、aliases、popularityScore。
+- 新查询：keyword、energyType、bodyStyle、minPriceCents、maxPriceCents、sortBy、sortDirection。
+- 测试用例：已按 main 的 `docs/quality/test-cases/_template.md` 分成两个故事文件。
+- 测试执行报告：未生成。
+
+BASELINE
+- 命令：pnpm lint; pnpm typecheck; pnpm test; pnpm test:e2e:api; pnpm build
+- 工作目录：E:\Github源码\Tuyue\途越
+- 输入：本地 main 代码基线 6e30bd9；随后只同步测试用例模板提交到 b421df9，未改变业务代码基线。
+- 字面结果：lint 退出 0；typecheck 退出 0；Vitest 23 files / 126 tests passed；test:e2e:api 失败：expected length 3 but got 4。
+- 退出状态：1
+- 说明：基线冒烟断言仍写 3 台，但当前已上架固定数据为 4 台；本次更新为 4 后恢复通过。
+
+MODIFIED
+- 命令：pnpm exec prettier --check <本次变更文件>; pnpm lint; pnpm typecheck; pnpm test; pnpm test:e2e:api; pnpm build
+- 工作目录：E:\Github源码\Tuyue\途越
+- 输入：US-CAR-03 / US-SRC-01 完整代码、契约、文档及测试。
+- 字面结果：All matched files use Prettier code style；lint 退出 0；typecheck 退出 0；Vitest 25 files / 139 tests passed；API smoke 1 file / 1 test passed；web/admin/api build Done。
+- 退出状态：0
+
+BROWSER E2E
+- 命令：pnpm test:e2e
+- 工作目录：E:\Github源码\Tuyue\途越
+- 输入：Playwright 全量 web/admin/api 浏览器验收，包括 e2e/web/car-discovery.spec.ts。
+- 字面输出：28 passed (14.9s)
+- 退出状态：0
+
+FORMAT BASELINE NOTE
+- 命令：pnpm format:check
+- 字面结果：Code style issues found in 123 files。
+- 退出状态：1
+- 说明：这些为本任务开始前已存在的全仓格式差异；本次变更文件单独执行 prettier --check 全部通过，没有批量改写无关文件。
+
+ROLLBACK
+- 命令：& 'C:\Program Files\Git\bin\bash.exe' ./ROLLBACK.sh ./rollback-test-3
+- 工作目录：E:\Github源码\Tuyue\outputs\lintao-car-search-20261110
+- 输入：仅包含本次修改后文件的独立测试副本 ./rollback-test-3。
+- 字面输出：ROLLBACK_OK target=/e/Github源码/Tuyue/outputs/lintao-car-search-20261110/rollback-test-3 restored_base=b421df9；EXIT_STATUS=0；HASH_MISMATCHES=0；NEW_FILES_REMAINING=0。
+- 退出状态：0
+- 恢复行为：测试副本已反向应用 MODIFIED_FILE.patch；6 个新增文件已删除，11 个原文件 SHA-256 全部恢复；正式工作区仍保持修改状态。

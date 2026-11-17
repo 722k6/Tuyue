@@ -34,6 +34,31 @@ export const EnergyType = {
 } as const;
 export type EnergyType = (typeof EnergyType)[keyof typeof EnergyType];
 
+/** US-CAR-03 访客端车身形式筛选。新增值只能做向后兼容扩展。 */
+export const BodyStyle = {
+  SUV: 'suv',
+  SEDAN: 'sedan',
+  MPV: 'mpv',
+} as const;
+export type BodyStyle = (typeof BodyStyle)[keyof typeof BodyStyle];
+
+export const CarCatalogSort = {
+  PRICE: 'price',
+  POPULARITY: 'popularity',
+} as const;
+export type CarCatalogSort = (typeof CarCatalogSort)[keyof typeof CarCatalogSort];
+
+/** US-CAR-03 / US-SRC-01 共用的前台车型目录查询契约。金额单位固定为分。 */
+export interface CarCatalogQuery {
+  keyword?: string;
+  energyType?: EnergyType;
+  bodyStyle?: BodyStyle;
+  minPriceCents?: number;
+  maxPriceCents?: number;
+  sortBy?: CarCatalogSort;
+  sortDirection?: SortDirection;
+}
+
 export const PublishStatus = {
   DRAFT: 'draft',
   PENDING_REVIEW: 'pending_review',
@@ -94,10 +119,13 @@ export interface CarSummary {
   name: string;
   series: string;
   energyType: EnergyType;
+  bodyStyle?: BodyStyle;
+  aliases?: string[];
   tagline: string;
   thumbnailUrl: string;
   priceMinCents: number;
   priceMaxCents: number;
+  popularityScore?: number;
   publishStatus: PublishStatus;
 }
 
@@ -276,10 +304,7 @@ export function validateCarParameters(parameters: CarParameter[]): CarFieldError
       });
     }
 
-    if (
-      item?.group !== undefined &&
-      !Object.values(CarParameterGroup).includes(item.group)
-    ) {
+    if (item?.group !== undefined && !Object.values(CarParameterGroup).includes(item.group)) {
       errors.push({ field: `${prefix}.group`, message: '请选择有效的参数分组' });
     }
   });
