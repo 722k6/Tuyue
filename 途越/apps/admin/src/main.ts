@@ -23,6 +23,8 @@ import {
   ElSelect,
   ElTable,
   ElTableColumn,
+  ElTabPane,
+  ElTabs,
   ElTag,
   ElUpload,
 } from 'element-plus';
@@ -58,6 +60,8 @@ const app = createApp(App).use(createPinia()).use(router).use(ElLoading);
   ElSelect,
   ElTable,
   ElTableColumn,
+  ElTabPane,
+  ElTabs,
   ElTag,
   ElUpload,
 ].forEach((component) => app.component(component.name!, component));
