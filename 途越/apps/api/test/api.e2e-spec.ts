@@ -17,7 +17,7 @@ describe('foundation smoke', () => {
     const activities = await request(app.getHttpServer()).get('/api/v1/activities').expect(200);
     const dealers = await request(app.getHttpServer()).get('/api/v1/dealers').expect(200);
     await request(app.getHttpServer()).get('/api/docs').expect(200);
-    expect(cars.body.data).toHaveLength(3);
+    expect(cars.body.data).toHaveLength(4);
     expect(activities.body.data).toHaveLength(1);
     expect(dealers.body.data).toHaveLength(2);
   });
