@@ -7,7 +7,7 @@
 `packages/contracts/src/index.ts` 是唯一共享类型入口：
 
 - 公共：`ApiResponse<T>`、`ApiError`、`PaginationQuery`、`PaginatedResponse<T>`、`SortDirection`
-- 车型：`CarSummary`、`CarDetail`、`CarImage`、`CarDraftInput`、`CarImageInput`、`CarParameter`、`CarConfigOption`、`EnergyType`、`PublishStatus`、`CAR_LIMITS`、`CAR_IMAGE_TYPES`、`validateCarDraft`、`normalizeCarImages`
+- 车型：`CarSummary`、`CarDetail`、`CarImage`、`CarDraftInput`、`CarImageInput`、`CarParameter`、`CarConfigOption`、`CarCatalogQuery`、`EnergyType`、`BodyStyle`、`CarCatalogSort`、`PublishStatus`、`CAR_LIMITS`、`CAR_IMAGE_TYPES`、`validateCarDraft`、`normalizeCarImages`
 - 权限：`AdminRole`、`PermissionCode`、`LoginRequest`、`MockLoginRequest`、`AuthUser`、`AuthResponse`
 - AI：`AiChatRequest`、`AiStreamEvent`、`AiRecommendation`
 - 对比选配：`CompareItem`、`CompareParameterRow`、`ConfigurationSelection`、`QuoteResult`
@@ -41,6 +41,26 @@
 
 成功响应统一为 `{ success: true, data, requestId }`。失败响应统一为 `{ success: false, error: { code, message, details? }, requestId }`。不存在的车型返回 HTTP 404 和 `CAR_NOT_FOUND`。
 
+### 前台车型筛选、排序与关键词搜索（US-CAR-03 / US-SRC-01）
+
+`GET /api/v1/cars` 保持返回 `CarSummary[]`，并可组合以下查询参数：
+
+| 参数 | 类型/可选值 | 说明 |
+| ---- | ----------- | ---- |
+| `keyword` | string，最长 80 字符 | 对车型名称、别名、参数 code/名称/值/单位执行不区分大小写的包含检索 |
+| `energyType` | `gasoline` / `hybrid` / `electric` | 能源类型精确筛选 |
+| `bodyStyle` | `suv` / `sedan` / `mpv` | 车身形式精确筛选 |
+| `minPriceCents` | 非负整数 | 价格区间下限，单位为分 |
+| `maxPriceCents` | 非负整数 | 价格区间上限，单位为分 |
+| `sortBy` | `price` / `popularity` | 按最低指导价或热度分排序 |
+| `sortDirection` | `asc` / `desc` | 排序方向；价格默认升序，热度默认降序 |
+
+价格筛选使用区间相交语义：车型价格区间与访客输入区间有交集即命中。无匹配结果返回成功响应和空数组。非法枚举、非法金额、最低价高于最高价时返回 HTTP 400、错误码 `INVALID_CAR_QUERY`。
+
+```http
+GET /api/v1/cars?keyword=620&energyType=electric&bodyStyle=sedan&minPriceCents=20000000&maxPriceCents=25000000&sortBy=price&sortDirection=asc
+```
+
 ### 后台车型接口细则
 
 - 列表查询参数：`keyword`（匹配名称/系列/卖点）、`status`（`PublishStatus`）、`page`（默认 1）、`pageSize`（默认 10，上限 50），返回 `PaginatedResponse<CarSummary>`。
@@ -71,6 +91,9 @@ Mock 数据集中在 `packages/test-utils/src/index.ts`，页面不得复制一�
 ## 字段约定
 
 - 金额：字段名以 `Cents` 结尾，使用人民币分的整数值。
+- 车型车身形式：`suv`、`sedan`、`mpv`；新增值时只做向后兼容扩展。
+- 车型别名：`aliases` 为字符串数组，供关键词搜索使用。
+- 热度：`popularityScore` 为非负数，数值越大热度越高。
 - 时间：使用带时区的 ISO 8601 字符串。
 - 经纬度：`longitude` 与 `latitude` 都是十进制度数值。
 - 缺失对比参数：使用 `null`，不能用 `0` 代替。
