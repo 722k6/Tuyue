@@ -1,0 +1,1312 @@
+diff --git "a/\351\200\224\350\266\212/README.md" "b/\351\200\224\350\266\212/README.md"
+index 42bedc2..76efc75 100644
+--- "a/\351\200\224\350\266\212/README.md"
++++ "b/\351\200\224\350\266\212/README.md"
+@@ -47,7 +47,7 @@ pnpm dev:api      # http://localhost:3000/api
+ ## Mock API
+ 
+ - `GET /api/health`
+-- `GET /api/v1/cars`
++- `GET /api/v1/cars`（支持关键词、能源、车身、价格筛选及价格/热度排序）
+ - `GET /api/v1/cars/:id`
+ - `POST /api/v1/auth/mock-login`
+ - `GET /api/v1/activities`
+@@ -64,6 +64,8 @@ pnpm dev:api      # http://localhost:3000/api
+ 
+ 请求和响应字段、固定 ID、金额与时间格式见 `docs/api/foundation-contracts.md`。
+ 
++官网 `/cars` 会把关键词、筛选条件和排序同步到 URL，刷新、前进后退或分享链接后可恢复同一结果。
++
+ ## 质量命令
+ 
+ ```bash
+diff --git "a/\351\200\224\350\266\212/apps/api/src/car-repository.ts" "b/\351\200\224\350\266\212/apps/api/src/car-repository.ts"
+index add8e44..c2f47d6 100644
+--- "a/\351\200\224\350\266\212/apps/api/src/car-repository.ts"
++++ "b/\351\200\224\350\266\212/apps/api/src/car-repository.ts"
+@@ -4,6 +4,7 @@ import {
+   CarStatusAction,
+   PublishStatus,
+   type AdminCarListItem,
++  type CarCatalogQuery,
+   type CarDetail,
+   type CarReviewLog,
+   type CarReviewResponse,
+@@ -13,6 +14,7 @@ import {
+ } from '@tuyue/contracts';
+ import { mockCars } from '@tuyue/test-utils';
+ import { randomUUID } from 'node:crypto';
++import { selectPublishedCars } from './car-catalog-query.js';
+ 
+ export interface CarStatusChangeInput {
+   carId: string;
+@@ -38,10 +40,13 @@ function toSummary(car: CarDetail): CarSummary {
+     name: car.name,
+     series: car.series,
+     energyType: car.energyType,
++    ...(car.bodyStyle ? { bodyStyle: car.bodyStyle } : {}),
++    ...(car.aliases ? { aliases: [...car.aliases] } : {}),
+     tagline: car.tagline,
+     thumbnailUrl: car.thumbnailUrl,
+     priceMinCents: car.priceMinCents,
+     priceMaxCents: car.priceMaxCents,
++    ...(car.popularityScore !== undefined ? { popularityScore: car.popularityScore } : {}),
+     publishStatus: car.publishStatus,
+   };
+ }
+@@ -87,10 +92,8 @@ export class CarRepository {
+   }
+ 
+   /** 前台列表：强制只返回已上架车型（US-CAR-13 验收点）。 */
+-  listPublished(): CarSummary[] {
+-    return [...this.cars.values()]
+-      .filter((car) => car.publishStatus === PublishStatus.PUBLISHED)
+-      .map(toSummary);
++  listPublished(query: CarCatalogQuery = {}): CarSummary[] {
++    return selectPublishedCars([...this.cars.values()], query).map(toSummary);
+   }
+ 
+   /** 后台列表：包含草稿与已下线车型，附留痕条数。 */
+diff --git "a/\351\200\224\350\266\212/apps/api/src/controllers.ts" "b/\351\200\224\350\266\212/apps/api/src/controllers.ts"
+index ca7356f..61705c4 100644
+--- "a/\351\200\224\350\266\212/apps/api/src/controllers.ts"
++++ "b/\351\200\224\350\266\212/apps/api/src/controllers.ts"
+@@ -1,14 +1,9 @@
+-import {
+-  BadRequestException,
+-  Body,
+-  Controller,
+-  Get,
+-  Param,
+-  Post,
+-} from '@nestjs/common';
++import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
++import { ApiQuery } from '@nestjs/swagger';
+ import type { DashboardMetrics } from '@tuyue/contracts';
+ import { mockActivities, mockDashboardMetrics, mockDealers } from '@tuyue/test-utils';
+ import { carRepository } from './car-repository.js';
++import { parseCarCatalogQuery } from './car-catalog-query.js';
+ 
+ @Controller('health')
+ export class HealthController {
+@@ -25,8 +20,15 @@ export class CarsController {
+    * 过滤放在服务端而不是前端 v-if，否则下架车型的图片和价格仍会随响应体发到浏览器。
+    */
+   @Get()
+-  listCars() {
+-    return carRepository.listPublished();
++  @ApiQuery({ name: 'keyword', required: false, description: '车型名称、别名或参数关键词' })
++  @ApiQuery({ name: 'energyType', required: false, enum: ['gasoline', 'hybrid', 'electric'] })
++  @ApiQuery({ name: 'bodyStyle', required: false, enum: ['suv', 'sedan', 'mpv'] })
++  @ApiQuery({ name: 'minPriceCents', required: false, type: Number, minimum: 0 })
++  @ApiQuery({ name: 'maxPriceCents', required: false, type: Number, minimum: 0 })
++  @ApiQuery({ name: 'sortBy', required: false, enum: ['price', 'popularity'] })
++  @ApiQuery({ name: 'sortDirection', required: false, enum: ['asc', 'desc'] })
++  listCars(@Query() rawQuery: Record<string, unknown>) {
++    return carRepository.listPublished(parseCarCatalogQuery(rawQuery));
+   }
+ 
+   @Get(':id')
+diff --git "a/\351\200\224\350\266\212/apps/api/test/api.e2e-spec.ts" "b/\351\200\224\350\266\212/apps/api/test/api.e2e-spec.ts"
+index f7b9bee..49ffcf9 100644
+--- "a/\351\200\224\350\266\212/apps/api/test/api.e2e-spec.ts"
++++ "b/\351\200\224\350\266\212/apps/api/test/api.e2e-spec.ts"
+@@ -17,7 +17,7 @@ describe('foundation smoke', () => {
+     const activities = await request(app.getHttpServer()).get('/api/v1/activities').expect(200);
+     const dealers = await request(app.getHttpServer()).get('/api/v1/dealers').expect(200);
+     await request(app.getHttpServer()).get('/api/docs').expect(200);
+-    expect(cars.body.data).toHaveLength(3);
++    expect(cars.body.data).toHaveLength(4);
+     expect(activities.body.data).toHaveLength(1);
+     expect(dealers.body.data).toHaveLength(2);
+   });
+diff --git "a/\351\200\224\350\266\212/apps/web/src/api.ts" "b/\351\200\224\350\266\212/apps/web/src/api.ts"
+index f021fd6..7c4bafd 100644
+--- "a/\351\200\224\350\266\212/apps/web/src/api.ts"
++++ "b/\351\200\224\350\266\212/apps/web/src/api.ts"
+@@ -1,4 +1,4 @@
+-import type { ApiResponse, CarDetail, CarSummary } from '@tuyue/contracts';
++import type { ApiResponse, CarCatalogQuery, CarDetail, CarSummary } from '@tuyue/contracts';
+ 
+ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
+ 
+@@ -8,8 +8,17 @@ async function get<T>(path: string): Promise<ApiResponse<T>> {
+   return response.json() as Promise<ApiResponse<T>>;
+ }
+ 
++function carCatalogPath(query: CarCatalogQuery): string {
++  const search = new URLSearchParams();
++  for (const [key, value] of Object.entries(query)) {
++    if (value !== undefined && value !== '') search.set(key, String(value));
++  }
++  const queryString = search.toString();
++  return `/v1/cars${queryString ? `?${queryString}` : ''}`;
++}
++
+ export const webApi = {
+   health: () => get<{ status: 'ok' }>('/health'),
+-  cars: () => get<CarSummary[]>('/v1/cars'),
++  cars: (query: CarCatalogQuery = {}) => get<CarSummary[]>(carCatalogPath(query)),
+   car: (id: string) => get<CarDetail>(`/v1/cars/${encodeURIComponent(id)}`),
+ };
+diff --git "a/\351\200\224\350\266\212/apps/web/src/pages/CarsPage.vue" "b/\351\200\224\350\266\212/apps/web/src/pages/CarsPage.vue"
+index 1cee09a..6544c70 100644
+--- "a/\351\200\224\350\266\212/apps/web/src/pages/CarsPage.vue"
++++ "b/\351\200\224\350\266\212/apps/web/src/pages/CarsPage.vue"
+@@ -1,47 +1,436 @@
+ <script setup lang="ts">
+-import type { CarSummary } from '@tuyue/contracts';
+-import { onMounted, ref } from 'vue';
+-import CompareToggle from '../features/compare/CompareToggle.vue';
++import {
++  BodyStyle,
++  CarCatalogSort,
++  EnergyType,
++  SortDirection,
++  type CarCatalogQuery,
++  type CarSummary,
++} from '@tuyue/contracts';
++import { computed, reactive, ref, watch } from 'vue';
++import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router';
+ import { webApi } from '../api';
++import CompareToggle from '../features/compare/CompareToggle.vue';
++
++type SortOption = '' | 'price-asc' | 'price-desc' | 'popularity-desc';
+ 
++const route = useRoute();
++const router = useRouter();
+ const cars = ref<CarSummary[]>([]);
++const loading = ref(false);
+ const error = ref('');
+-onMounted(async () => {
++let requestSequence = 0;
++
++const filters = reactive({
++  keyword: '',
++  energyType: '',
++  bodyStyle: '',
++  minPriceWan: '',
++  maxPriceWan: '',
++  sort: '' as SortOption,
++});
++
++const energyLabels: Record<string, string> = {
++  [EnergyType.GASOLINE]: '燃油',
++  [EnergyType.HYBRID]: '混动',
++  [EnergyType.ELECTRIC]: '纯电',
++};
++
++const bodyStyleLabels: Record<string, string> = {
++  [BodyStyle.SUV]: 'SUV',
++  [BodyStyle.SEDAN]: '轿车',
++  [BodyStyle.MPV]: 'MPV',
++};
++
++function queryValue(name: string): string {
++  const value = route.query[name];
++  if (Array.isArray(value)) return value[0] ?? '';
++  return value ?? '';
++}
++
++function syncFiltersFromUrl(): void {
++  filters.keyword = queryValue('keyword');
++  filters.energyType = queryValue('energyType');
++  filters.bodyStyle = queryValue('bodyStyle');
++  filters.minPriceWan = queryValue('minPrice');
++  filters.maxPriceWan = queryValue('maxPrice');
++  const sort = queryValue('sort');
++  filters.sort = ['price-asc', 'price-desc', 'popularity-desc'].includes(sort)
++    ? (sort as SortOption)
++    : '';
++}
++
++function readPriceWan(value: string, label: string): number | undefined {
++  if (!value) return undefined;
++  const parsed = Number(value);
++  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`${label}请输入 0 以上的数字`);
++  return parsed;
++}
++
++function buildApiQuery(): CarCatalogQuery {
++  const query: CarCatalogQuery = {};
++  const keyword = queryValue('keyword').trim();
++  const energyType = queryValue('energyType');
++  const bodyStyle = queryValue('bodyStyle');
++  const minPriceWan = readPriceWan(queryValue('minPrice'), '最低价');
++  const maxPriceWan = readPriceWan(queryValue('maxPrice'), '最高价');
++  const sort = queryValue('sort');
++
++  if (minPriceWan !== undefined && maxPriceWan !== undefined && minPriceWan > maxPriceWan) {
++    throw new Error('最低价不能大于最高价');
++  }
++  if (keyword) query.keyword = keyword;
++  if (Object.values(EnergyType).includes(energyType as EnergyType)) {
++    query.energyType = energyType as EnergyType;
++  }
++  if (Object.values(BodyStyle).includes(bodyStyle as BodyStyle)) {
++    query.bodyStyle = bodyStyle as BodyStyle;
++  }
++  if (minPriceWan !== undefined) query.minPriceCents = Math.round(minPriceWan * 1_000_000);
++  if (maxPriceWan !== undefined) query.maxPriceCents = Math.round(maxPriceWan * 1_000_000);
++  if (sort === 'price-asc' || sort === 'price-desc') {
++    query.sortBy = CarCatalogSort.PRICE;
++    query.sortDirection = sort === 'price-asc' ? SortDirection.ASC : SortDirection.DESC;
++  }
++  if (sort === 'popularity-desc') {
++    query.sortBy = CarCatalogSort.POPULARITY;
++    query.sortDirection = SortDirection.DESC;
++  }
++  return query;
++}
++
++async function loadCars(): Promise<void> {
++  const currentRequest = ++requestSequence;
++  loading.value = true;
++  error.value = '';
+   try {
+-    cars.value = (await webApi.cars()).data;
+-  } catch {
+-    error.value = '车型 Mock API 暂时不可用';
++    const response = await webApi.cars(buildApiQuery());
++    if (currentRequest === requestSequence) cars.value = response.data;
++  } catch (cause) {
++    if (currentRequest === requestSequence) {
++      cars.value = [];
++      error.value = cause instanceof Error ? cause.message : '车型接口暂时不可用';
++    }
++  } finally {
++    if (currentRequest === requestSequence) loading.value = false;
+   }
++}
++
++function buildUrlQuery(): LocationQueryRaw {
++  const query: LocationQueryRaw = {};
++  if (filters.keyword.trim()) query.keyword = filters.keyword.trim();
++  if (filters.energyType) query.energyType = filters.energyType;
++  if (filters.bodyStyle) query.bodyStyle = filters.bodyStyle;
++  if (filters.minPriceWan) query.minPrice = filters.minPriceWan;
++  if (filters.maxPriceWan) query.maxPrice = filters.maxPriceWan;
++  if (filters.sort) query.sort = filters.sort;
++  return query;
++}
++
++async function applyFilters(): Promise<void> {
++  error.value = '';
++  try {
++    const minPriceWan = readPriceWan(filters.minPriceWan, '最低价');
++    const maxPriceWan = readPriceWan(filters.maxPriceWan, '最高价');
++    if (minPriceWan !== undefined && maxPriceWan !== undefined && minPriceWan > maxPriceWan) {
++      throw new Error('最低价不能大于最高价');
++    }
++    const target = router.resolve({ path: '/cars', query: buildUrlQuery() });
++    if (target.fullPath === route.fullPath) await loadCars();
++    else await router.push(target);
++  } catch (cause) {
++    error.value = cause instanceof Error ? cause.message : '筛选条件无效';
++  }
++}
++
++async function resetFilters(): Promise<void> {
++  Object.assign(filters, {
++    keyword: '',
++    energyType: '',
++    bodyStyle: '',
++    minPriceWan: '',
++    maxPriceWan: '',
++    sort: '',
++  });
++  if (route.fullPath === '/cars') await loadCars();
++  else await router.push('/cars');
++}
++
++function formatPriceRange(car: CarSummary): string {
++  const min = (car.priceMinCents / 1_000_000).toFixed(2).replace(/\.00$/, '');
++  const max = (car.priceMaxCents / 1_000_000).toFixed(2).replace(/\.00$/, '');
++  return `${min}–${max} 万元`;
++}
++
++const resultSummary = computed(() => {
++  const keyword = queryValue('keyword').trim();
++  return keyword
++    ? `“${keyword}”共找到 ${cars.value.length} 款车型`
++    : `共 ${cars.value.length} 款车型`;
+ });
++
++watch(
++  () => route.fullPath,
++  () => {
++    syncFiltersFromUrl();
++    void loadCars();
++  },
++  { immediate: true },
++);
+ </script>
+ 
+ <template>
+-  <section>
+-    <h1>车型列表</h1>
+-    <p v-if="error">
+-      {{ error }}
+-    </p>
+-    <div class="grid">
+-      <article v-for="car in cars" :key="car.id">
+-        <p>{{ car.series }}</p>
+-        <h2>{{ car.name }}</h2>
+-        <p>{{ car.tagline }}</p>
+-        <div class="card-actions">
+-          <RouterLink :to="`/cars/${car.id}`">查看占位详情</RouterLink>
+-          <CompareToggle :car="car" />
+-        </div>
+-      </article>
+-    </div>
++  <section class="cars-page">
++    <p class="eyebrow">FIND YOUR TUYUE</p>
++    <h1>车型筛选与搜索</h1>
++
++    <form class="car-filters" aria-label="车型筛选与搜索" @submit.prevent="applyFilters">
++      <label class="filter-keyword">
++        <span>关键词</span>
++        <input
++          v-model="filters.keyword"
++          name="keyword"
++          type="search"
++          maxlength="80"
++          placeholder="车型名称、别名或参数，如 620"
++        />
++      </label>
++      <label>
++        <span>能源类型</span>
++        <select v-model="filters.energyType" name="energyType">
++          <option value="">全部能源</option>
++          <option :value="EnergyType.GASOLINE">燃油</option>
++          <option :value="EnergyType.HYBRID">混动</option>
++          <option :value="EnergyType.ELECTRIC">纯电</option>
++        </select>
++      </label>
++      <label>
++        <span>车身形式</span>
++        <select v-model="filters.bodyStyle" name="bodyStyle">
++          <option value="">全部形式</option>
++          <option :value="BodyStyle.SUV">SUV</option>
++          <option :value="BodyStyle.SEDAN">轿车</option>
++          <option :value="BodyStyle.MPV">MPV</option>
++        </select>
++      </label>
++      <label>
++        <span>最低价（万元）</span>
++        <input v-model="filters.minPriceWan" name="minPrice" type="number" min="0" step="0.1" />
++      </label>
++      <label>
++        <span>最高价（万元）</span>
++        <input v-model="filters.maxPriceWan" name="maxPrice" type="number" min="0" step="0.1" />
++      </label>
++      <label>
++        <span>排序</span>
++        <select v-model="filters.sort" name="sort">
++          <option value="">默认排序</option>
++          <option value="price-asc">价格从低到高</option>
++          <option value="price-desc">价格从高到低</option>
++          <option value="popularity-desc">热度从高到低</option>
++        </select>
++      </label>
++      <div class="filter-actions">
++        <button class="primary-button" type="submit">筛选 / 搜索</button>
++        <button class="secondary-button" type="button" @click="resetFilters">清空条件</button>
++      </div>
++    </form>
++
++    <p v-if="error" class="feedback error-message" role="alert">{{ error }}</p>
++    <p v-else-if="loading" class="feedback" aria-live="polite">正在加载车型…</p>
++    <template v-else>
++      <div class="result-heading">
++        <h2>搜索结果</h2>
++        <p>{{ resultSummary }}</p>
++      </div>
++      <div v-if="cars.length" class="grid car-grid">
++        <article v-for="car in cars" :key="car.id" class="car-card">
++          <div class="car-meta">
++            <span>{{ energyLabels[car.energyType] }}</span>
++            <span v-if="car.bodyStyle">{{ bodyStyleLabels[car.bodyStyle] }}</span>
++          </div>
++          <p class="car-series">{{ car.series }}</p>
++          <h2>{{ car.name }}</h2>
++          <p>{{ car.tagline }}</p>
++          <p class="car-price">{{ formatPriceRange(car) }}</p>
++          <div class="card-actions">
++            <RouterLink :to="`/cars/${car.id}`">查看车型详情</RouterLink>
++            <CompareToggle :car="car" />
++          </div>
++        </article>
++      </div>
++      <div v-else class="empty-state">
++        <h2>没有找到匹配车型</h2>
++        <p>请尝试缩短关键词、放宽价格范围，或清空部分筛选条件。</p>
++        <button class="secondary-button" type="button" @click="resetFilters">查看全部车型</button>
++      </div>
++    </template>
+   </section>
+ </template>
+ 
+ <style scoped>
+-/* 加入对比按钮与详情链接并排，注意留出行距避免贴在一起 */
++button,
++input,
++select {
++  font: inherit;
++}
++
++.car-filters {
++  display: grid;
++  grid-template-columns: repeat(3, minmax(0, 1fr));
++  gap: 16px;
++  margin-bottom: 28px;
++  padding: 24px;
++  border: 1px solid #dbe3ec;
++  border-radius: 14px;
++  background: #fff;
++}
++
++.car-filters label {
++  display: grid;
++  gap: 8px;
++  color: #354252;
++  font-size: 0.9rem;
++  font-weight: 600;
++}
++
++.car-filters input,
++.car-filters select {
++  width: 100%;
++  min-height: 44px;
++  padding: 9px 12px;
++  border: 1px solid #bcc9d8;
++  border-radius: 8px;
++  background: #fff;
++  color: #17202a;
++}
++
++.car-filters input:focus,
++.car-filters select:focus {
++  outline: 3px solid rgb(36 87 167 / 18%);
++  border-color: #2457a7;
++}
++
++.filter-keyword {
++  grid-column: span 2;
++}
++
++.filter-actions,
+ .card-actions {
+   display: flex;
+   align-items: center;
+   gap: 10px;
+   flex-wrap: wrap;
++}
++
++.filter-actions {
++  align-items: end;
++}
++
++.card-actions {
+   margin-top: 10px;
+ }
++
++.primary-button,
++.secondary-button {
++  min-height: 44px;
++  padding: 9px 16px;
++  border-radius: 8px;
++  cursor: pointer;
++}
++
++.primary-button {
++  border: 1px solid #2457a7;
++  background: #2457a7;
++  color: #fff;
++}
++
++.secondary-button {
++  border: 1px solid #aebdce;
++  background: #fff;
++  color: #26384b;
++}
++
++.feedback,
++.empty-state {
++  padding: 24px;
++  border-radius: 12px;
++  background: #fff;
++}
++
++.error-message {
++  border: 1px solid #f1b8b8;
++  color: #9b2020;
++  background: #fff3f3;
++}
++
++.result-heading {
++  display: flex;
++  align-items: baseline;
++  justify-content: space-between;
++  gap: 16px;
++  margin: 28px 0 16px;
++}
++
++.result-heading h2,
++.result-heading p {
++  margin: 0;
++}
++
++.car-card {
++  border: 1px solid #e0e6ed;
++  box-shadow: 0 8px 24px rgb(29 50 74 / 7%);
++}
++
++.car-card h2 {
++  margin: 8px 0;
++  font-size: 1.5rem;
++}
++
++.car-meta {
++  display: flex;
++  gap: 8px;
++}
++
++.car-meta span {
++  padding: 4px 8px;
++  border-radius: 999px;
++  background: #e8f0fa;
++  color: #234f85;
++  font-size: 0.8rem;
++}
++
++.car-series {
++  color: #647386;
++}
++
++.car-price {
++  font-size: 1.1rem;
++  font-weight: 700;
++  color: #b14b25;
++}
++
++.empty-state {
++  text-align: center;
++}
++
++@media (max-width: 760px) {
++  .car-filters {
++    grid-template-columns: 1fr;
++  }
++
++  .filter-keyword {
++    grid-column: auto;
++  }
++
++  .filter-actions {
++    align-items: stretch;
++    flex-direction: column;
++  }
++
++  .result-heading {
++    align-items: flex-start;
++    flex-direction: column;
++  }
++}
+ </style>
+diff --git "a/\351\200\224\350\266\212/docs/api/foundation-contracts.md" "b/\351\200\224\350\266\212/docs/api/foundation-contracts.md"
+index a8d91ea..b0875c7 100644
+--- "a/\351\200\224\350\266\212/docs/api/foundation-contracts.md"
++++ "b/\351\200\224\350\266\212/docs/api/foundation-contracts.md"
+@@ -7,7 +7,7 @@
+ `packages/contracts/src/index.ts` 是唯一共享类型入口：
+ 
+ - 公共：`ApiResponse<T>`、`ApiError`、`PaginationQuery`、`PaginatedResponse<T>`、`SortDirection`
+-- 车型：`CarSummary`、`CarDetail`、`CarImage`、`CarDraftInput`、`CarImageInput`、`CarParameter`、`CarConfigOption`、`EnergyType`、`PublishStatus`、`CAR_LIMITS`、`CAR_IMAGE_TYPES`、`validateCarDraft`、`normalizeCarImages`
++- 车型：`CarSummary`、`CarDetail`、`CarImage`、`CarDraftInput`、`CarImageInput`、`CarParameter`、`CarConfigOption`、`CarCatalogQuery`、`EnergyType`、`BodyStyle`、`CarCatalogSort`、`PublishStatus`、`CAR_LIMITS`、`CAR_IMAGE_TYPES`、`validateCarDraft`、`normalizeCarImages`
+ - 权限：`AdminRole`、`PermissionCode`、`LoginRequest`、`MockLoginRequest`、`AuthUser`、`AuthResponse`
+ - AI：`AiChatRequest`、`AiStreamEvent`、`AiRecommendation`
+ - 对比选配：`CompareItem`、`CompareParameterRow`、`ConfigurationSelection`、`QuoteResult`
+@@ -41,6 +41,26 @@
+ 
+ 成功响应统一为 `{ success: true, data, requestId }`。失败响应统一为 `{ success: false, error: { code, message, details? }, requestId }`。不存在的车型返回 HTTP 404 和 `CAR_NOT_FOUND`。
+ 
++### 前台车型筛选、排序与关键词搜索（US-CAR-03 / US-SRC-01）
++
++`GET /api/v1/cars` 保持返回 `CarSummary[]`，并可组合以下查询参数：
++
++| 参数 | 类型/可选值 | 说明 |
++| ---- | ----------- | ---- |
++| `keyword` | string，最长 80 字符 | 对车型名称、别名、参数 code/名称/值/单位执行不区分大小写的包含检索 |
++| `energyType` | `gasoline` / `hybrid` / `electric` | 能源类型精确筛选 |
++| `bodyStyle` | `suv` / `sedan` / `mpv` | 车身形式精确筛选 |
++| `minPriceCents` | 非负整数 | 价格区间下限，单位为分 |
++| `maxPriceCents` | 非负整数 | 价格区间上限，单位为分 |
++| `sortBy` | `price` / `popularity` | 按最低指导价或热度分排序 |
++| `sortDirection` | `asc` / `desc` | 排序方向；价格默认升序，热度默认降序 |
++
++价格筛选使用区间相交语义：车型价格区间与访客输入区间有交集即命中。无匹配结果返回成功响应和空数组。非法枚举、非法金额、最低价高于最高价时返回 HTTP 400、错误码 `INVALID_CAR_QUERY`。
++
++```http
++GET /api/v1/cars?keyword=620&energyType=electric&bodyStyle=sedan&minPriceCents=20000000&maxPriceCents=25000000&sortBy=price&sortDirection=asc
++```
++
+ ### 后台车型接口细则
+ 
+ - 列表查询参数：`keyword`（匹配名称/系列/卖点）、`status`（`PublishStatus`）、`page`（默认 1）、`pageSize`（默认 10，上限 50），返回 `PaginatedResponse<CarSummary>`。
+@@ -71,6 +91,9 @@ Mock 数据集中在 `packages/test-utils/src/index.ts`，页面不得复制一
+ ## 字段约定
+ 
+ - 金额：字段名以 `Cents` 结尾，使用人民币分的整数值。
++- 车型车身形式：`suv`、`sedan`、`mpv`；新增值时只做向后兼容扩展。
++- 车型别名：`aliases` 为字符串数组，供关键词搜索使用。
++- 热度：`popularityScore` 为非负数，数值越大热度越高。
+ - 时间：使用带时区的 ISO 8601 字符串。
+ - 经纬度：`longitude` 与 `latitude` 都是十进制度数值。
+ - 缺失对比参数：使用 `null`，不能用 `0` 代替。
+diff --git "a/\351\200\224\350\266\212/packages/contracts/src/index.ts" "b/\351\200\224\350\266\212/packages/contracts/src/index.ts"
+index b969d7f..58a6e1a 100644
+--- "a/\351\200\224\350\266\212/packages/contracts/src/index.ts"
++++ "b/\351\200\224\350\266\212/packages/contracts/src/index.ts"
+@@ -34,6 +34,31 @@ export const EnergyType = {
+ } as const;
+ export type EnergyType = (typeof EnergyType)[keyof typeof EnergyType];
+ 
++/** US-CAR-03 访客端车身形式筛选。新增值只能做向后兼容扩展。 */
++export const BodyStyle = {
++  SUV: 'suv',
++  SEDAN: 'sedan',
++  MPV: 'mpv',
++} as const;
++export type BodyStyle = (typeof BodyStyle)[keyof typeof BodyStyle];
++
++export const CarCatalogSort = {
++  PRICE: 'price',
++  POPULARITY: 'popularity',
++} as const;
++export type CarCatalogSort = (typeof CarCatalogSort)[keyof typeof CarCatalogSort];
++
++/** US-CAR-03 / US-SRC-01 共用的前台车型目录查询契约。金额单位固定为分。 */
++export interface CarCatalogQuery {
++  keyword?: string;
++  energyType?: EnergyType;
++  bodyStyle?: BodyStyle;
++  minPriceCents?: number;
++  maxPriceCents?: number;
++  sortBy?: CarCatalogSort;
++  sortDirection?: SortDirection;
++}
++
+ export const PublishStatus = {
+   DRAFT: 'draft',
+   PENDING_REVIEW: 'pending_review',
+@@ -94,10 +119,13 @@ export interface CarSummary {
+   name: string;
+   series: string;
+   energyType: EnergyType;
++  bodyStyle?: BodyStyle;
++  aliases?: string[];
+   tagline: string;
+   thumbnailUrl: string;
+   priceMinCents: number;
+   priceMaxCents: number;
++  popularityScore?: number;
+   publishStatus: PublishStatus;
+ }
+ 
+@@ -276,10 +304,7 @@ export function validateCarParameters(parameters: CarParameter[]): CarFieldError
+       });
+     }
+ 
+-    if (
+-      item?.group !== undefined &&
+-      !Object.values(CarParameterGroup).includes(item.group)
+-    ) {
++    if (item?.group !== undefined && !Object.values(CarParameterGroup).includes(item.group)) {
+       errors.push({ field: `${prefix}.group`, message: '请选择有效的参数分组' });
+     }
+   });
+diff --git "a/\351\200\224\350\266\212/packages/contracts/test/contracts.spec.ts" "b/\351\200\224\350\266\212/packages/contracts/test/contracts.spec.ts"
+index 79beea3..e2b55fb 100644
+--- "a/\351\200\224\350\266\212/packages/contracts/test/contracts.spec.ts"
++++ "b/\351\200\224\350\266\212/packages/contracts/test/contracts.spec.ts"
+@@ -2,10 +2,13 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
+ import {
+   ADMIN_ROLE_PERMISSIONS,
+   AdminRole,
++  BodyStyle,
++  CarCatalogSort,
+   CarReviewAction,
+   EnergyType,
+   PublishStatus,
+   type ApiResponse,
++  type CarCatalogQuery,
+   type CarSummary,
+ } from '../src/index';
+ 
+@@ -17,6 +20,8 @@ describe('shared contracts', () => {
+       SUPER_ADMIN: 'super_admin',
+     });
+     expect(Object.values(EnergyType)).toContain('electric');
++    expect(BodyStyle).toEqual({ SUV: 'suv', SEDAN: 'sedan', MPV: 'mpv' });
++    expect(CarCatalogSort).toEqual({ PRICE: 'price', POPULARITY: 'popularity' });
+     expect(PublishStatus.PUBLISHED).toBe('published');
+   });
+ 
+@@ -38,4 +43,16 @@ describe('shared contracts', () => {
+       requestId: string;
+     }>();
+   });
++
++  it('types the public catalog filter and search query without any', () => {
++    expectTypeOf<CarCatalogQuery>().toMatchTypeOf<{
++      keyword?: string;
++      energyType?: 'gasoline' | 'hybrid' | 'electric';
++      bodyStyle?: 'suv' | 'sedan' | 'mpv';
++      minPriceCents?: number;
++      maxPriceCents?: number;
++      sortBy?: 'price' | 'popularity';
++      sortDirection?: 'asc' | 'desc';
++    }>();
++  });
+ });
+diff --git "a/\351\200\224\350\266\212/packages/test-utils/src/index.ts" "b/\351\200\224\350\266\212/packages/test-utils/src/index.ts"
+index 8889fa5..3a77438 100644
+--- "a/\351\200\224\350\266\212/packages/test-utils/src/index.ts"
++++ "b/\351\200\224\350\266\212/packages/test-utils/src/index.ts"
+@@ -1,5 +1,6 @@
+ import {
+   AdminRole,
++  BodyStyle,
+   CarParameterGroup,
+   EnergyType,
+   PublishStatus,
+@@ -24,10 +25,13 @@ export const mockCars: CarDetail[] = [
+     name: '途越远行',
+     series: '远行系列',
+     energyType: EnergyType.GASOLINE,
++    bodyStyle: BodyStyle.SUV,
++    aliases: ['远行 SUV', '远行越野'],
+     tagline: '从容应对每一段旅程',
+     thumbnailUrl: '/mock/cars/ty-suv-001.webp',
+     priceMinCents: 18_990_000,
+     priceMaxCents: 23_990_000,
++    popularityScore: 96,
+     publishStatus: PublishStatus.PUBLISHED,
+     galleryUrls: ['/mock/cars/ty-suv-001-1.webp', '/mock/cars/ty-suv-001-2.webp'],
+     images: [
+@@ -74,10 +78,13 @@ export const mockCars: CarDetail[] = [
+     name: '途越星驰',
+     series: '星驰系列',
+     energyType: EnergyType.ELECTRIC,
++    bodyStyle: BodyStyle.SEDAN,
++    aliases: ['星驰 EV', '纯电轿车'],
+     tagline: '安静而高效的城市出行',
+     thumbnailUrl: '/mock/cars/ty-ev-001.webp',
+     priceMinCents: 21_990_000,
+     priceMaxCents: 27_990_000,
++    popularityScore: 88,
+     publishStatus: PublishStatus.PUBLISHED,
+     galleryUrls: ['/mock/cars/ty-ev-001-1.webp', '/mock/cars/ty-ev-001-2.webp'],
+     images: [
+@@ -127,10 +134,13 @@ export const mockCars: CarDetail[] = [
+     name: '途越云境',
+     series: '云境系列',
+     energyType: EnergyType.HYBRID,
++    bodyStyle: BodyStyle.SUV,
++    aliases: ['云境混动', '混动 SUV'],
+     tagline: '兼顾效率与远途续航',
+     thumbnailUrl: '/mock/cars/ty-hybrid-001.webp',
+     priceMinCents: 25_990_000,
+     priceMaxCents: 31_990_000,
++    popularityScore: 92,
+     publishStatus: PublishStatus.PUBLISHED,
+     galleryUrls: ['/mock/cars/ty-hybrid-001-1.webp'],
+     images: [{ id: 'ty-hybrid-001-img-1', url: '/mock/cars/ty-hybrid-001-1.webp', isCover: true }],
+@@ -179,10 +189,13 @@ export const mockCars: CarDetail[] = [
+     name: '途越瀚途',
+     series: '瀚途系列',
+     energyType: EnergyType.HYBRID,
++    bodyStyle: BodyStyle.MPV,
++    aliases: ['瀚途 MPV', '家用 MPV'],
+     tagline: '大空间多人出行的移动客厅',
+     thumbnailUrl: '/mock/cars/ty-mpv-001.webp',
+     priceMinCents: 27_990_000,
+     priceMaxCents: 34_990_000,
++    popularityScore: 81,
+     publishStatus: PublishStatus.PUBLISHED,
+     galleryUrls: ['/mock/cars/ty-mpv-001-1.webp'],
+     images: [{ id: 'ty-mpv-001-img-1', url: '/mock/cars/ty-mpv-001-1.webp', isCover: true }],
+@@ -227,10 +240,13 @@ export const mockCars: CarDetail[] = [
+     name: '途越启程',
+     series: '启程系列',
+     energyType: EnergyType.GASOLINE,
++    bodyStyle: BodyStyle.SEDAN,
++    aliases: ['启程轿车'],
+     tagline: '已停售车型，仅后台可见',
+     thumbnailUrl: '/mock/cars/ty-legacy-001.webp',
+     priceMinCents: 12_990_000,
+     priceMaxCents: 15_990_000,
++    popularityScore: 60,
+     publishStatus: PublishStatus.OFFLINE,
+     galleryUrls: ['/mock/cars/ty-legacy-001-1.webp'],
+     images: [{ id: 'ty-legacy-001-img-1', url: '/mock/cars/ty-legacy-001-1.webp', isCover: true }],
+diff --git "a/\351\200\224\350\266\212/packages/test-utils/test/mock-data.spec.ts" "b/\351\200\224\350\266\212/packages/test-utils/test/mock-data.spec.ts"
+index dd943be..9619440 100644
+--- "a/\351\200\224\350\266\212/packages/test-utils/test/mock-data.spec.ts"
++++ "b/\351\200\224\350\266\212/packages/test-utils/test/mock-data.spec.ts"
+@@ -11,6 +11,9 @@ describe('central mock data', () => {
+       'ty-legacy-001',
+     ]);
+     expect(new Set(mockCars.map((car) => car.energyType)).size).toBeGreaterThanOrEqual(2);
++    expect(new Set(mockCars.map((car) => car.bodyStyle))).toEqual(new Set(['suv', 'sedan', 'mpv']));
++    expect(mockCars.every((car) => (car.aliases?.length ?? 0) > 0)).toBe(true);
++    expect(mockCars.every((car) => (car.popularityScore ?? 0) > 0)).toBe(true);
+     expect(mockDealers).toHaveLength(2);
+     expect(mockAdminUsers.map((user) => user.role)).toEqual(['editor', 'reviewer', 'super_admin']);
+   });
+diff --git "a/\351\200\224\350\266\212/apps/api/src/car-catalog-query.ts" "b/\351\200\224\350\266\212/apps/api/src/car-catalog-query.ts"
+new file mode 100644
+index 0000000..ff1a8b2
+--- /dev/null
++++ "b/\351\200\224\350\266\212/apps/api/src/car-catalog-query.ts"
+@@ -0,0 +1,123 @@
++import { BadRequestException } from '@nestjs/common';
++import {
++  BodyStyle,
++  CarCatalogSort,
++  EnergyType,
++  PublishStatus,
++  SortDirection,
++  type CarCatalogQuery,
++  type CarDetail,
++} from '@tuyue/contracts';
++
++const MAX_KEYWORD_LENGTH = 80;
++
++function invalidQuery(message: string): never {
++  throw new BadRequestException({ code: 'INVALID_CAR_QUERY', message });
++}
++
++function readSingleValue(raw: unknown, field: string): string | undefined {
++  if (raw === undefined) return undefined;
++  if (typeof raw !== 'string') invalidQuery(`${field} 只能传入一个字符串值`);
++  return raw.trim();
++}
++
++function readEnum<T extends string>(
++  raw: unknown,
++  field: string,
++  allowedValues: readonly T[],
++): T | undefined {
++  const value = readSingleValue(raw, field);
++  if (!value) return undefined;
++  if (!allowedValues.includes(value as T)) {
++    invalidQuery(`${field} 可选值为 ${allowedValues.join(', ')}`);
++  }
++  return value as T;
++}
++
++function readCents(raw: unknown, field: string): number | undefined {
++  const value = readSingleValue(raw, field);
++  if (!value) return undefined;
++  if (!/^\d+$/.test(value)) invalidQuery(`${field} 必须是非负整数（单位：分）`);
++  const parsed = Number(value);
++  if (!Number.isSafeInteger(parsed)) invalidQuery(`${field} 超出安全整数范围`);
++  return parsed;
++}
++
++/** 将 HTTP 查询字符串收窄为共享契约，并在入口统一拒绝无效值。 */
++export function parseCarCatalogQuery(raw: Record<string, unknown>): CarCatalogQuery {
++  const query: CarCatalogQuery = {};
++  const keyword = readSingleValue(raw.keyword, 'keyword');
++  if (keyword) {
++    if (keyword.length > MAX_KEYWORD_LENGTH) {
++      invalidQuery(`keyword 最长 ${MAX_KEYWORD_LENGTH} 个字符`);
++    }
++    query.keyword = keyword;
++  }
++
++  const energyType = readEnum(raw.energyType, 'energyType', Object.values(EnergyType));
++  const bodyStyle = readEnum(raw.bodyStyle, 'bodyStyle', Object.values(BodyStyle));
++  const sortBy = readEnum(raw.sortBy, 'sortBy', Object.values(CarCatalogSort));
++  const sortDirection = readEnum(raw.sortDirection, 'sortDirection', Object.values(SortDirection));
++  const minPriceCents = readCents(raw.minPriceCents, 'minPriceCents');
++  const maxPriceCents = readCents(raw.maxPriceCents, 'maxPriceCents');
++
++  if (minPriceCents !== undefined && maxPriceCents !== undefined && minPriceCents > maxPriceCents) {
++    invalidQuery('minPriceCents 不能大于 maxPriceCents');
++  }
++
++  if (energyType) query.energyType = energyType;
++  if (bodyStyle) query.bodyStyle = bodyStyle;
++  if (sortBy) query.sortBy = sortBy;
++  if (sortDirection) query.sortDirection = sortDirection;
++  if (minPriceCents !== undefined) query.minPriceCents = minPriceCents;
++  if (maxPriceCents !== undefined) query.maxPriceCents = maxPriceCents;
++  return query;
++}
++
++function containsKeyword(car: CarDetail, keyword: string): boolean {
++  const parameterKeywords = car.parameters.flatMap((parameter) => [
++    parameter.code,
++    parameter.label,
++    parameter.value,
++    parameter.unit ?? '',
++  ]);
++  const searchableText = [car.name, ...(car.aliases ?? []), ...parameterKeywords]
++    .join(' ')
++    .toLocaleLowerCase('zh-CN');
++  return searchableText.includes(keyword.toLocaleLowerCase('zh-CN'));
++}
++
++/**
++ * 前台目录查询：先强制过滤已上架，再组合关键词、枚举和价格区间。
++ * 价格使用区间相交语义，只要车型价格区间与访客区间有交集即命中。
++ */
++export function selectPublishedCars(
++  cars: readonly CarDetail[],
++  query: CarCatalogQuery,
++): CarDetail[] {
++  const selected = cars.filter((car) => {
++    if (car.publishStatus !== PublishStatus.PUBLISHED) return false;
++    if (query.keyword && !containsKeyword(car, query.keyword)) return false;
++    if (query.energyType && car.energyType !== query.energyType) return false;
++    if (query.bodyStyle && car.bodyStyle !== query.bodyStyle) return false;
++    if (query.minPriceCents !== undefined && car.priceMaxCents < query.minPriceCents) return false;
++    if (query.maxPriceCents !== undefined && car.priceMinCents > query.maxPriceCents) return false;
++    return true;
++  });
++
++  if (query.sortBy) {
++    const direction =
++      query.sortDirection ??
++      (query.sortBy === CarCatalogSort.POPULARITY ? SortDirection.DESC : SortDirection.ASC);
++    const factor = direction === SortDirection.ASC ? 1 : -1;
++    selected.sort((left, right) => {
++      const leftValue =
++        query.sortBy === CarCatalogSort.PRICE ? left.priceMinCents : (left.popularityScore ?? 0);
++      const rightValue =
++        query.sortBy === CarCatalogSort.PRICE ? right.priceMinCents : (right.popularityScore ?? 0);
++      return (leftValue - rightValue) * factor || left.id.localeCompare(right.id);
++    });
++  }
++
++  return selected;
++}
+diff --git "a/\351\200\224\350\266\212/apps/api/test/car-catalog-query.spec.ts" "b/\351\200\224\350\266\212/apps/api/test/car-catalog-query.spec.ts"
+new file mode 100644
+index 0000000..f4c617f
+--- /dev/null
++++ "b/\351\200\224\350\266\212/apps/api/test/car-catalog-query.spec.ts"
+@@ -0,0 +1,119 @@
++import type { INestApplication } from '@nestjs/common';
++import request from 'supertest';
++import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
++import { createApplication } from '../src/app.js';
++import { carRepository } from '../src/car-repository.js';
++
++describe('US-CAR-03 / US-SRC-01 public car catalog query', () => {
++  let app: INestApplication;
++
++  beforeAll(async () => {
++    app = await createApplication();
++    await app.init();
++  });
++  beforeEach(() => carRepository.reset());
++  afterAll(async () => app.close());
++
++  it('combines energy, body style and overlapping price range filters', async () => {
++    const response = await request(app.getHttpServer())
++      .get('/api/v1/cars')
++      .query({
++        energyType: 'electric',
++        bodyStyle: 'sedan',
++        minPriceCents: 20_000_000,
++        maxPriceCents: 25_000_000,
++      })
++      .expect(200);
++
++    expect(response.body.data.map((car: { id: string }) => car.id)).toEqual(['ty-ev-001']);
++  });
++
++  it('sorts by price or popularity with documented default directions', async () => {
++    const byPrice = await request(app.getHttpServer())
++      .get('/api/v1/cars')
++      .query({ sortBy: 'price', sortDirection: 'desc' })
++      .expect(200);
++    expect(byPrice.body.data.map((car: { id: string }) => car.id)).toEqual([
++      'ty-mpv-001',
++      'ty-hybrid-001',
++      'ty-ev-001',
++      'ty-suv-001',
++    ]);
++
++    const byPopularity = await request(app.getHttpServer())
++      .get('/api/v1/cars')
++      .query({ sortBy: 'popularity' })
++      .expect(200);
++    expect(byPopularity.body.data.map((car: { id: string }) => car.id)).toEqual([
++      'ty-suv-001',
++      'ty-hybrid-001',
++      'ty-ev-001',
++      'ty-mpv-001',
++    ]);
++  });
++
++  it.each([
++    ['车型名称', '星驰', 'ty-ev-001'],
++    ['车型别名（大小写不敏感）', 'mpv', 'ty-mpv-001'],
++    ['参数名称', 'CLTC 续航', 'ty-ev-001'],
++    ['参数值', '620', 'ty-ev-001'],
++  ])('searches by %s using substring matching', async (_label, keyword, expectedId) => {
++    const response = await request(app.getHttpServer())
++      .get('/api/v1/cars')
++      .query({ keyword })
++      .expect(200);
++    expect(response.body.data.map((car: { id: string }) => car.id)).toEqual([expectedId]);
++  });
++
++  it('returns a successful empty list when no keyword matches', async () => {
++    const response = await request(app.getHttpServer())
++      .get('/api/v1/cars')
++      .query({ keyword: '不存在的车型' })
++      .expect(200);
++    expect(response.body.data).toEqual([]);
++  });
++
++  it('rejects invalid values with the unified query error', async () => {
++    const response = await request(app.getHttpServer())
++      .get('/api/v1/cars')
++      .query({ minPriceCents: 30_000_000, maxPriceCents: 20_000_000 })
++      .expect(400);
++    expect(response.body).toEqual({
++      success: false,
++      error: {
++        code: 'INVALID_CAR_QUERY',
++        message: 'minPriceCents 不能大于 maxPriceCents',
++      },
++      requestId: expect.any(String),
++    });
++  });
++
++  it.each([
++    [{ energyType: 'diesel' }, 'energyType 可选值为 gasoline, hybrid, electric'],
++    [{ keyword: '关'.repeat(81) }, 'keyword 最长 80 个字符'],
++  ])('rejects invalid query input %j', async (query, message) => {
++    const response = await request(app.getHttpServer())
++      .get('/api/v1/cars')
++      .query(query)
++      .expect(400);
++    expect(response.body.error).toEqual({ code: 'INVALID_CAR_QUERY', message });
++  });
++
++  it('publishes all catalog query parameters in OpenAPI', async () => {
++    const response = await request(app.getHttpServer()).get('/api/openapi.json').expect(200);
++    const names = response.body.paths['/api/v1/cars'].get.parameters.map(
++      (parameter: { name: string }) => parameter.name,
++    );
++    expect(names).toEqual(
++      expect.arrayContaining([
++        'keyword',
++        'energyType',
++        'bodyStyle',
++        'minPriceCents',
++        'maxPriceCents',
++        'sortBy',
++        'sortDirection',
++      ]),
++    );
++  });
++});
+diff --git "a/\351\200\224\350\266\212/apps/web/test/car-catalog.api.spec.ts" "b/\351\200\224\350\266\212/apps/web/test/car-catalog.api.spec.ts"
+new file mode 100644
+index 0000000..3f7a81c
+--- /dev/null
++++ "b/\351\200\224\350\266\212/apps/web/test/car-catalog.api.spec.ts"
+@@ -0,0 +1,28 @@
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import { webApi } from '../src/api';
++
++describe('car catalog web API', () => {
++  afterEach(() => vi.unstubAllGlobals());
++
++  it('serializes filter, sort and keyword conditions into the public endpoint', async () => {
++    const fetchMock = vi.fn().mockResolvedValue({
++      ok: true,
++      json: async () => ({ success: true, data: [], requestId: 'req-catalog' }),
++    });
++    vi.stubGlobal('fetch', fetchMock);
++
++    await webApi.cars({
++      keyword: '家用 MPV',
++      energyType: 'hybrid',
++      bodyStyle: 'mpv',
++      minPriceCents: 20_000_000,
++      maxPriceCents: 35_000_000,
++      sortBy: 'popularity',
++      sortDirection: 'desc',
++    });
++
++    expect(fetchMock).toHaveBeenCalledWith(
++      '/api/v1/cars?keyword=%E5%AE%B6%E7%94%A8+MPV&energyType=hybrid&bodyStyle=mpv&minPriceCents=20000000&maxPriceCents=35000000&sortBy=popularity&sortDirection=desc',
++    );
++  });
++});
+diff --git "a/\351\200\224\350\266\212/e2e/web/car-discovery.spec.ts" "b/\351\200\224\350\266\212/e2e/web/car-discovery.spec.ts"
+new file mode 100644
+index 0000000..b29a9fb
+--- /dev/null
++++ "b/\351\200\224\350\266\212/e2e/web/car-discovery.spec.ts"
+@@ -0,0 +1,52 @@
++import { expect, test } from '@playwright/test';
++import { waitForApiReady } from '../support/wait-for-api';
++
++test.describe('US-CAR-03 / US-SRC-01 车型筛选、排序与关键词搜索', () => {
++  test.beforeEach(async ({ request }) => {
++    await waitForApiReady(request);
++  });
++
++  test('组合筛选与排序写入 URL，刷新后条件和结果保持', async ({ page }) => {
++    await page.goto('/cars');
++    await page.getByLabel('能源类型').selectOption('electric');
++    await page.getByLabel('车身形式').selectOption('sedan');
++    await page.getByLabel('最低价（万元）').fill('20');
++    await page.getByLabel('最高价（万元）').fill('25');
++    await page.getByLabel('排序').selectOption('price-asc');
++    await page.getByRole('button', { name: '筛选 / 搜索' }).click();
++
++    await expect(page).toHaveURL(/energyType=electric/);
++    await expect(page).toHaveURL(/bodyStyle=sedan/);
++    await expect(page).toHaveURL(/minPrice=20/);
++    await expect(page).toHaveURL(/maxPrice=25/);
++    await expect(page).toHaveURL(/sort=price-asc/);
++    await expect(page.locator('.car-card')).toHaveCount(1);
++
++    await page.reload();
++    await expect(page.getByLabel('能源类型')).toHaveValue('electric');
++    await expect(page.getByLabel('车身形式')).toHaveValue('sedan');
++    await expect(page.getByLabel('最低价（万元）')).toHaveValue('20');
++    await expect(page.getByLabel('最高价（万元）')).toHaveValue('25');
++    await expect(page.getByLabel('排序')).toHaveValue('price-asc');
++    await expect(page.locator('.car-card')).toHaveCount(1);
++
++    await page.getByRole('button', { name: '清空条件' }).click();
++    await expect(page).toHaveURL(/\/cars$/);
++    await expect(page.locator('.car-card')).toHaveCount(4);
++  });
++
++  test('参数关键词命中车型，无结果时给出调整条件的引导', async ({ page }) => {
++    await page.goto('/cars');
++    await page.getByLabel('关键词').fill('620');
++    await page.getByRole('button', { name: '筛选 / 搜索' }).click();
++    await expect(page).toHaveURL(/keyword=620/);
++    await expect(page.locator('.car-card')).toHaveCount(1);
++    await expect(page.getByRole('link', { name: '查看车型详情' })).toBeVisible();
++    await expect(page.getByRole('button', { name: '加入对比' })).toBeVisible();
++
++    await page.getByLabel('关键词').fill('不存在的车型');
++    await page.getByRole('button', { name: '筛选 / 搜索' }).click();
++    await expect(page.getByRole('heading', { name: '没有找到匹配车型' })).toBeVisible();
++    await expect(page.getByText('请尝试缩短关键词')).toBeVisible();
++  });
++});
+diff --git "a/\351\200\224\350\266\212/docs/quality/test-cases/US-CAR-03-\347\255\233\351\200\211\344\270\216\346\216\222\345\272\217.md" "b/\351\200\224\350\266\212/docs/quality/test-cases/US-CAR-03-\347\255\233\351\200\211\344\270\216\346\216\222\345\272\217.md"
+new file mode 100644
+index 0000000..a180b52
+--- /dev/null
++++ "b/\351\200\224\350\266\212/docs/quality/test-cases/US-CAR-03-\347\255\233\351\200\211\344\270\216\346\216\222\345\272\217.md"
+@@ -0,0 +1,44 @@
++# US-CAR-03 筛选与排序 测试用例
++
++| 项目     | 内容                                  |
++| -------- | ------------------------------------- |
++| 用户故事 | US-CAR-03 筛选与排序                  |
++| 负责人   | 林涛                                  |
++| 测试人   | 糜昊廷                                |
++| 测试日期 | 2026-11-10                            |
++| 被测版本 | BrenL（基于 main b421df9，待提交 PR） |
++| 故事状态 | 开发完成                              |
++
++## 前置条件
++
++- 环境：`pnpm dev` 已启动（api :3000、web :5173、admin :5174）
++- 账号：访客功能，无需登录
++- 数据：已上架 `ty-suv-001`、`ty-ev-001`、`ty-hybrid-001`、`ty-mpv-001`；已下架 `ty-legacy-001`
++- 契约：`docs/api/foundation-contracts.md`「前台车型筛选、排序与关键词搜索」
++
++## 测试用例
++
++| 用例编号 | 优先级 | 前置条件   | 操作步骤                                                                       | 预期结果                                           | 自动化脚本                                                      | 执行结果 | 缺陷编号 |
++| -------- | ------ | ---------- | ------------------------------------------------------------------------------ | -------------------------------------------------- | --------------------------------------------------------------- | -------- | -------- |
++| CAR03-01 | P0     | 服务已启动 | 请求 `GET /api/v1/cars`                                                        | 200；只返回 4 台已上架车型，已下架车型不出现       | `apps/api/test/api.spec.ts`、`apps/api/test/car-status.spec.ts` | 通过     |          |
++| CAR03-02 | P0     | 同上       | 请求 `GET /api/v1/cars?energyType=electric`                                    | 200；结果全部为纯电车型                            | `apps/api/test/car-catalog-query.spec.ts`                       | 通过     |          |
++| CAR03-03 | P0     | 同上       | 请求 `GET /api/v1/cars?bodyStyle=sedan`                                        | 200；结果全部为轿车                                | 同上                                                            | 通过     |          |
++| CAR03-04 | P0     | 同上       | 请求价格区间 `20000000–25000000` 分                                            | 200；返回价格区间与查询区间有交集的车型            | 同上                                                            | 通过     |          |
++| CAR03-05 | P0     | 同上       | 同时传 `energyType=electric`、`bodyStyle=sedan`、最低价 20 万、最高价 25 万    | 200；只返回同时满足全部条件的车型                  | 同上                                                            | 通过     |          |
++| CAR03-06 | P1     | 同上       | 分别按价格升序、降序查询                                                       | 200；结果按最低指导价正确升序或降序                | 同上                                                            | 通过     |          |
++| CAR03-07 | P1     | 同上       | 传 `sortBy=popularity`，不传排序方向                                           | 200；默认按热度从高到低                            | 同上                                                            | 通过     |          |
++| CAR03-08 | P0     | 官网已打开 | 1. 选择纯电、轿车、20–25 万、价格升序<br>2. 点击「筛选 / 搜索」<br>3. 刷新页面 | URL 包含全部筛选条件；结果正确；刷新后控件和值保持 | `e2e/web/car-discovery.spec.ts`                                 | 通过     |          |
++| CAR03-09 | P1     | 已应用筛选 | 点击「清空条件」                                                               | URL 恢复 `/cars`；筛选控件清空；恢复全部已上架车型 | 同上                                                            | 通过     |          |
++| CAR03-10 | P1     | 服务已启动 | 请求 `energyType=diesel`                                                       | 400 `INVALID_CAR_QUERY`；说明允许的能源类型        | `apps/api/test/car-catalog-query.spec.ts`                       | 通过     |          |
++| CAR03-11 | P1     | 同上       | 最低价 30 万、最高价 20 万                                                     | 400 `INVALID_CAR_QUERY`；提示最低价不能大于最高价  | 同上                                                            | 通过     |          |
++
++## 缺陷汇总
++
++| 编号 | 关联用例 | 描述           | 严重级 | 状态 |
++| ---- | -------- | -------------- | ------ | ---- |
++| 无   | —        | 本轮未发现缺陷 | —      | —    |
++
++## 备注
++
++- 价格筛选采用区间相交语义，不要求车型最低价和最高价都完全落入访客区间。
++- 页面使用万元输入，接口统一换算为整数分。
+diff --git "a/\351\200\224\350\266\212/docs/quality/test-cases/US-SRC-01-\345\205\263\351\224\256\350\257\215\346\220\234\347\264\242.md" "b/\351\200\224\350\266\212/docs/quality/test-cases/US-SRC-01-\345\205\263\351\224\256\350\257\215\346\220\234\347\264\242.md"
+new file mode 100644
+index 0000000..627141c
+--- /dev/null
++++ "b/\351\200\224\350\266\212/docs/quality/test-cases/US-SRC-01-\345\205\263\351\224\256\350\257\215\346\220\234\347\264\242.md"
+@@ -0,0 +1,43 @@
++# US-SRC-01 关键词搜索 测试用例
++
++| 项目     | 内容                                  |
++| -------- | ------------------------------------- |
++| 用户故事 | US-SRC-01 关键词搜索                  |
++| 负责人   | 林涛                                  |
++| 测试人   | 唐轩                                  |
++| 测试日期 | 2026-11-10                            |
++| 被测版本 | BrenL（基于 main b421df9，待提交 PR） |
++| 故事状态 | 开发完成                              |
++
++## 前置条件
++
++- 环境：`pnpm dev` 已启动（api :3000、web :5173、admin :5174）
++- 账号：访客功能，无需登录
++- 数据：`ty-ev-001` 名称含「星驰」、参数含「CLTC 续航 620 km」；`ty-mpv-001` 别名含「家用 MPV」
++- 契约：`docs/api/foundation-contracts.md`「前台车型筛选、排序与关键词搜索」
++
++## 测试用例
++
++| 用例编号 | 优先级 | 前置条件        | 操作步骤                                        | 预期结果                                                       | 自动化脚本                                                 | 执行结果 | 缺陷编号 |
++| -------- | ------ | --------------- | ----------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------- | -------- | -------- |
++| SRC01-01 | P0     | 服务已启动      | 请求 `GET /api/v1/cars?keyword=星驰`            | 200；返回名称包含「星驰」的已上架车型                          | `apps/api/test/car-catalog-query.spec.ts`                  | 通过     |          |
++| SRC01-02 | P0     | 同上            | 请求 `keyword=mpv`                              | 200；不区分大小写命中别名含「MPV」的车型                       | 同上                                                       | 通过     |          |
++| SRC01-03 | P0     | 同上            | 请求 `keyword=CLTC 续航`                        | 200；命中参数名称包含该关键词的车型                            | 同上                                                       | 通过     |          |
++| SRC01-04 | P0     | 同上            | 请求 `keyword=620`                              | 200；命中参数值包含 `620` 的车型                               | 同上                                                       | 通过     |          |
++| SRC01-05 | P1     | 同上            | 请求不存在的关键词                              | 200；`data=[]`，不返回 404                                     | 同上                                                       | 通过     |          |
++| SRC01-06 | P1     | 同上            | 请求 81 个字符的关键词                          | 400 `INVALID_CAR_QUERY`；提示关键词最长 80 个字符              | 同上                                                       | 通过     |          |
++| SRC01-07 | P0     | 官网已打开      | 1. 输入 `620`<br>2. 点击「筛选 / 搜索」         | URL 写入关键词；只显示匹配车型；结果卡片保留详情和加入对比入口 | `e2e/web/car-discovery.spec.ts`                            | 通过     |          |
++| SRC01-08 | P0     | 官网已打开      | 1. 输入不存在的关键词<br>2. 点击「筛选 / 搜索」 | 显示「没有找到匹配车型」并引导缩短关键词、放宽价格或清空条件   | 同上                                                       | 通过     |          |
++| SRC01-09 | P1     | 前端 API 可调用 | 用中文别名和全部筛选条件调用 `webApi.cars()`    | 请求 URL 正确编码中文、空格、金额和排序参数                    | `apps/web/test/car-catalog.api.spec.ts`                    | 通过     |          |
++| SRC01-10 | P1     | 搜索已有结果    | 点击结果卡片的「查看车型详情」或「加入对比」    | 详情入口可用；原对比功能保持可用                               | `e2e/web/car-discovery.spec.ts`、`e2e/web/compare.spec.ts` | 通过     |          |
++
++## 缺陷汇总
++
++| 编号 | 关联用例 | 描述           | 严重级 | 状态 |
++| ---- | -------- | -------------- | ------ | ---- |
++| 无   | —        | 本轮未发现缺陷 | —      | —    |
++
++## 备注
++
++- 关键词对车型名称、别名、参数 code、参数名称、参数值和单位执行包含检索。
++- 只搜索已上架车型，已下架车型不会因关键词命中而返回。

@@ -2,10 +2,13 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   ADMIN_ROLE_PERMISSIONS,
   AdminRole,
+  BodyStyle,
+  CarCatalogSort,
   CarReviewAction,
   EnergyType,
   PublishStatus,
   type ApiResponse,
+  type CarCatalogQuery,
   type CarSummary,
 } from '../src/index';
 
@@ -17,6 +20,8 @@ describe('shared contracts', () => {
       SUPER_ADMIN: 'super_admin',
     });
     expect(Object.values(EnergyType)).toContain('electric');
+    expect(BodyStyle).toEqual({ SUV: 'suv', SEDAN: 'sedan', MPV: 'mpv' });
+    expect(CarCatalogSort).toEqual({ PRICE: 'price', POPULARITY: 'popularity' });
     expect(PublishStatus.PUBLISHED).toBe('published');
   });
 
@@ -36,6 +41,18 @@ describe('shared contracts', () => {
       success: boolean;
       data: CarSummary[];
       requestId: string;
+    }>();
+  });
+
+  it('types the public catalog filter and search query without any', () => {
+    expectTypeOf<CarCatalogQuery>().toMatchTypeOf<{
+      keyword?: string;
+      energyType?: 'gasoline' | 'hybrid' | 'electric';
+      bodyStyle?: 'suv' | 'sedan' | 'mpv';
+      minPriceCents?: number;
+      maxPriceCents?: number;
+      sortBy?: 'price' | 'popularity';
+      sortDirection?: 'asc' | 'desc';
     }>();
   });
 });
