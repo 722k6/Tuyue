@@ -47,7 +47,7 @@ pnpm dev:api      # http://localhost:3000/api
 ## Mock API
 
 - `GET /api/health`
-- `GET /api/v1/cars`
+- `GET /api/v1/cars`（支持关键词、能源、车身、价格筛选及价格/热度排序）
 - `GET /api/v1/cars/:id`
 - `POST /api/v1/auth/mock-login`
 - `GET /api/v1/activities`
@@ -63,6 +63,8 @@ pnpm dev:api      # http://localhost:3000/api
 上传的图片写入 `apps/api/storage/uploads`（已加入 `.gitignore`），通过 `/static/uploads/<文件名>` 访问。车型字段与图片校验规则定义在 `packages/contracts`，后台表单与接口共用同一份校验函数。
 
 请求和响应字段、固定 ID、金额与时间格式见 `docs/api/foundation-contracts.md`。
+
+官网 `/cars` 会把关键词、筛选条件和排序同步到 URL，刷新、前进后退或分享链接后可恢复同一结果。
 
 ## 质量命令
 

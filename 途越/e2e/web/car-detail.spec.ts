@@ -27,7 +27,7 @@ test.describe('官网车型详情', () => {
     await page.goto('/cars');
     await page
       .locator('.car-card[data-car-id="ty-suv-001"]')
-      .getByRole('link', { name: '查看详情' })
+      .getByRole('link', { name: '查看车型详情' })
       .click();
 
     await expect(page).toHaveURL(/\/cars\/ty-suv-001$/);

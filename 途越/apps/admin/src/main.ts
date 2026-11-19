@@ -25,6 +25,8 @@ import {
   ElSelect,
   ElTable,
   ElTableColumn,
+  ElTabPane,
+  ElTabs,
   ElTag,
   ElUpload,
 } from 'element-plus';
@@ -62,6 +64,8 @@ const globalComponents = [
   ElSelect,
   ElTable,
   ElTableColumn,
+  ElTabPane,
+  ElTabs,
   ElTag,
   ElUpload,
 ];

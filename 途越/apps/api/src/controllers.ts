@@ -1,14 +1,9 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-} from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { ApiQuery } from '@nestjs/swagger';
 import type { DashboardMetrics } from '@tuyue/contracts';
 import { mockActivities, mockDashboardMetrics, mockDealers } from '@tuyue/test-utils';
 import { carRepository } from './car-repository.js';
+import { parseCarCatalogQuery } from './car-catalog-query.js';
 
 @Controller('health')
 export class HealthController {
@@ -25,8 +20,15 @@ export class CarsController {
    * 过滤放在服务端而不是前端 v-if，否则下架车型的图片和价格仍会随响应体发到浏览器。
    */
   @Get()
-  listCars() {
-    return carRepository.listPublished();
+  @ApiQuery({ name: 'keyword', required: false, description: '车型名称、别名或参数关键词' })
+  @ApiQuery({ name: 'energyType', required: false, enum: ['gasoline', 'hybrid', 'electric'] })
+  @ApiQuery({ name: 'bodyStyle', required: false, enum: ['suv', 'sedan', 'mpv'] })
+  @ApiQuery({ name: 'minPriceCents', required: false, type: Number, minimum: 0 })
+  @ApiQuery({ name: 'maxPriceCents', required: false, type: Number, minimum: 0 })
+  @ApiQuery({ name: 'sortBy', required: false, enum: ['price', 'popularity'] })
+  @ApiQuery({ name: 'sortDirection', required: false, enum: ['asc', 'desc'] })
+  listCars(@Query() rawQuery: Record<string, unknown>) {
+    return carRepository.listPublished(parseCarCatalogQuery(rawQuery));
   }
 
   @Get(':id')

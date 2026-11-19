@@ -45,7 +45,7 @@ const imageFailed = ref(false);
       <p class="car-card__price">{{ formatPriceRange(car.priceMinCents, car.priceMaxCents) }}</p>
 
       <div class="car-card__actions">
-        <RouterLink :to="`/cars/${car.id}`" class="car-card__link">查看详情</RouterLink>
+        <RouterLink :to="`/cars/${car.id}`" class="car-card__link">查看车型详情</RouterLink>
         <CompareToggle :car="car" />
       </div>
     </div>

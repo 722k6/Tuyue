@@ -1,4 +1,4 @@
-import { PublishStatus, type CarSummary } from '@tuyue/contracts';
+import { PublishStatus, type CarCatalogQuery, type CarSummary } from '@tuyue/contracts';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { webApi } from '../../api';
@@ -23,10 +23,10 @@ export function parsePageSize(value: unknown): number {
 /**
  * 前台车型列表状态（US-CAR-01）。
  *
- * 分页放在前端做：`GET /v1/cars` 按契约一次性返回全部已上架车型（见
- * docs/api/foundation-contracts.md），服务端没有公开列表的分页参数。
- * 上架车型的量级是「几十台」，一次性取回再切页反而让翻页没有网络等待；
- * 将来接口补上 page/pageSize 时，只需要把 load() 换成带参请求，组件不用动。
+ * 分页放在前端做：`GET /v1/cars` 支持筛选、搜索与排序，但不提供列表分页参数
+ * （见 docs/api/foundation-contracts.md）。上架车型是「几十台」的量级，
+ * 按筛选条件一次性取回再切页，翻页就没有网络等待；将来接口补上 page/pageSize，
+ * 只需要把 load() 换成带参请求，组件不用动。
  */
 export const useCarListStore = defineStore('carList', () => {
   const items = ref<CarSummary[]>([]);
@@ -47,11 +47,12 @@ export const useCarListStore = defineStore('carList', () => {
   );
   const rangeEnd = computed(() => Math.min(page.value * pageSize.value, total.value));
 
-  async function load(): Promise<void> {
+  /** query 来自筛选 / 搜索表单（US-CAR-03、US-SRC-01），为空时就是「全部在售车型」。 */
+  async function load(query: CarCatalogQuery = {}): Promise<void> {
     status.value = 'loading';
     errorMessage.value = '';
     try {
-      const response = await webApi.cars();
+      const response = await webApi.cars(query);
       // 服务端已强制只返回已上架车型（US-CAR-13）。这里再过滤一次是防御性兜底：
       // 一旦契约退化或中间层缓存了旧数据，也不能把下架车型的价格与图片渲染出去。
       items.value = response.data.filter(
@@ -82,6 +83,13 @@ export const useCarListStore = defineStore('carList', () => {
     page.value = 1;
   }
 
+  /** 前端校验失败：不发请求，直接把错误挂到列表状态上，由页面统一渲染，避免两套错误提示。 */
+  function fail(message: string): void {
+    items.value = [];
+    status.value = 'error';
+    errorMessage.value = message;
+  }
+
   /** 从 URL 查询参数恢复分页状态，刷新与分享链接后仍停在同一页。 */
   function applyQuery(query: { page?: unknown; pageSize?: unknown }): void {
     pageSize.value = parsePageSize(query.pageSize);
@@ -100,6 +108,7 @@ export const useCarListStore = defineStore('carList', () => {
     rangeStart,
     rangeEnd,
     load,
+    fail,
     setPage,
     setPageSize,
     applyQuery,

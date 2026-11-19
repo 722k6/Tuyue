@@ -29,7 +29,7 @@ test.describe('官网车型列表', () => {
     const first = cards.first();
     await expect(first.getByRole('heading', { level: 2 })).toHaveText(body.data[0]!.name);
     await expect(first.locator('.car-card__price')).toHaveText(/\d+(\.\d+)?(–\d+(\.\d+)?)? 万/);
-    await expect(first.getByRole('link', { name: '查看详情' })).toBeVisible();
+    await expect(first.getByRole('link', { name: '查看车型详情' })).toBeVisible();
   });
 
   test('已下架车型不出现在列表里', async ({ page, request }) => {
