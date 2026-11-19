@@ -4,13 +4,16 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApplication } from '../src/app.js';
 import { carRepository } from '../src/car-repository.js';
 import { compareService } from '../src/compare-service.js';
+import { adminApi, loginToken } from './support/auth.js';
 
 describe('US-CAR-13 车型上下架', () => {
   let app: INestApplication;
+  let token: string;
 
   beforeAll(async () => {
     app = await createApplication();
     await app.init();
+    token = await loginToken(app, 'superAdmin');
   });
 
   afterAll(async () => app.close());
@@ -35,14 +38,14 @@ describe('US-CAR-13 车型上下架', () => {
   });
 
   it('后台列表包含已下线车型并带留痕条数', async () => {
-    const response = await request(app.getHttpServer()).get('/api/v1/admin/cars').expect(200);
+    const response = await adminApi(app, token).get('/api/v1/admin/cars').expect(200);
     const legacy = response.body.data.find((car: { id: string }) => car.id === 'ty-legacy-001');
     expect(legacy.publishStatus).toBe('offline');
     expect(legacy.auditLogCount).toBe(0);
   });
 
   it('上架后前台立刻可见，并留下一条操作记录', async () => {
-    const changed = await request(app.getHttpServer())
+    const changed = await adminApi(app, token)
       .post('/api/v1/admin/cars/ty-legacy-001/status')
       .send({ action: 'publish', actor: '周子涵' })
       .expect(201);
@@ -64,12 +67,12 @@ describe('US-CAR-13 车型上下架', () => {
   });
 
   it('下架必须记录原因，且下架后前台不可见', async () => {
-    await request(app.getHttpServer())
+    await adminApi(app, token)
       .post('/api/v1/admin/cars/ty-suv-001/status')
       .send({ action: 'offline', actor: '周子涵', reason: '改款停产' })
       .expect(201);
 
-    const logs = await request(app.getHttpServer())
+    const logs = await adminApi(app, token)
       .get('/api/v1/admin/cars/ty-suv-001/audit-logs')
       .expect(200);
     expect(logs.body.data).toHaveLength(1);
@@ -86,7 +89,7 @@ describe('US-CAR-13 车型上下架', () => {
   });
 
   it('重复上架返回 409，而不是静默成功', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await adminApi(app, token)
       .post('/api/v1/admin/cars/ty-suv-001/status')
       .send({ action: 'publish' })
       .expect(409);
@@ -94,7 +97,7 @@ describe('US-CAR-13 车型上下架', () => {
   });
 
   it('对未上架车型执行下架返回 409', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await adminApi(app, token)
       .post('/api/v1/admin/cars/ty-legacy-001/status')
       .send({ action: 'offline' })
       .expect(409);
@@ -102,29 +105,29 @@ describe('US-CAR-13 车型上下架', () => {
   });
 
   it('非法动作与不存在的车型分别返回 400 / 404', async () => {
-    const invalid = await request(app.getHttpServer())
+    const invalid = await adminApi(app, token)
       .post('/api/v1/admin/cars/ty-suv-001/status')
       .send({ action: 'delete' })
       .expect(400);
     expect(invalid.body.error.code).toBe('INVALID_STATUS_ACTION');
 
-    await request(app.getHttpServer())
+    await adminApi(app, token)
       .post('/api/v1/admin/cars/unknown-car/status')
       .send({ action: 'publish' })
       .expect(404);
   });
 
   it('留痕按时间倒序返回，先上架后下架能还原完整轨迹', async () => {
-    await request(app.getHttpServer())
+    await adminApi(app, token)
       .post('/api/v1/admin/cars/ty-legacy-001/status')
       .send({ action: 'publish', actor: '周子涵' })
       .expect(201);
-    await request(app.getHttpServer())
+    await adminApi(app, token)
       .post('/api/v1/admin/cars/ty-legacy-001/status')
       .send({ action: 'offline', actor: '汤毅威', reason: '库存清理' })
       .expect(201);
 
-    const logs = await request(app.getHttpServer())
+    const logs = await adminApi(app, token)
       .get('/api/v1/admin/cars/ty-legacy-001/audit-logs')
       .expect(200);
     expect(logs.body.data.map((log: { action: string }) => log.action)).toEqual([
@@ -132,7 +135,7 @@ describe('US-CAR-13 车型上下架', () => {
       'publish',
     ]);
 
-    const list = await request(app.getHttpServer()).get('/api/v1/admin/cars').expect(200);
+    const list = await adminApi(app, token).get('/api/v1/admin/cars').expect(200);
     const legacy = list.body.data.find((car: { id: string }) => car.id === 'ty-legacy-001');
     expect(legacy.auditLogCount).toBe(2);
   });

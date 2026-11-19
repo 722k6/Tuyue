@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Inject, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post } from '@nestjs/common';
 import {
   CarReviewAction,
   type AdminCarListItem,
@@ -7,19 +7,10 @@ import {
   type CarReviewResponse,
 } from '@tuyue/contracts';
 import { assertAdminPermission } from './admin-access.js';
+import type { AdminPrincipal } from './auth/admin-auth.guard.js';
+import { CurrentAdmin } from './auth/current-admin.js';
 import { carRepository } from './car-repository.js';
 import { CarStore } from './cars/car-store.js';
-
-/** 前端把中文用户名编码后放进请求头，这里还原。 */
-function decodeHeaderUser(value?: string): string | undefined {
-  const text = value?.trim();
-  if (!text) return undefined;
-  try {
-    return decodeURIComponent(text).trim() || undefined;
-  } catch {
-    return text;
-  }
-}
 
 /**
  * 内容审核发布（US-ADM-02）。
@@ -45,16 +36,15 @@ export class CarReviewController {
   review(
     @Param('id') id: string,
     @Body() body: CarReviewRequest,
-    @Headers('x-admin-role') role?: string,
-    @Headers('x-admin-user') username?: string,
+    @CurrentAdmin() admin: AdminPrincipal,
   ): CarReviewResponse {
     const action = String(body?.action ?? '');
     assertAdminPermission(
-      role,
+      admin.role,
       action === CarReviewAction.SUBMIT ? 'content:edit' : 'content:review',
     );
 
-    const actor = body?.actor?.trim() || decodeHeaderUser(username);
+    const actor = body?.actor?.trim() || admin.username;
     const result = carRepository.changeReviewStatus({
       carId: id,
       action,

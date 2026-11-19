@@ -6,6 +6,7 @@ import type {
   CarStatusAuditLog,
   CarStatusChangeResponse,
 } from '@tuyue/contracts';
+import { getAccessToken, notifyUnauthorized } from '../../session';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
@@ -21,8 +22,12 @@ export class CarStatusApiError extends Error {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAccessToken();
   const response = await fetch(`${apiBaseUrl}${path}`, {
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
     ...init,
   });
 
@@ -31,6 +36,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     | ApiError
     | null;
 
+  if (response.status === 401 && token) notifyUnauthorized();
   if (!response.ok || !body || !body.success) {
     const error = body && !body.success ? body.error : null;
     throw new CarStatusApiError(
