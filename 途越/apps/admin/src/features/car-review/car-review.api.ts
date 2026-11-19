@@ -6,6 +6,7 @@ import type {
   CarReviewLog,
   CarReviewResponse,
 } from '@tuyue/contracts';
+import { getAccessToken, notifyUnauthorized } from '../../session';
 import { getAdminRole, getAdminUserHeader } from '../admin-session';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
@@ -29,16 +30,19 @@ function sessionHeaders(): Record<string, string> {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAccessToken();
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     headers: {
       'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...sessionHeaders(),
       ...(init?.headers as Record<string, string> | undefined),
     },
   });
 
   const body = (await response.json().catch(() => null)) as ApiResponse<T> | ApiError | null;
+  if (response.status === 401 && token) notifyUnauthorized();
   if (!response.ok || !body || body.success !== true) {
     const error = body && body.success === false ? body.error : null;
     throw new CarReviewApiError(

@@ -6,27 +6,28 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApplication } from '../src/app.js';
 import { carRepository } from '../src/car-repository.js';
 import { CarStore } from '../src/cars/car-store.js';
-
-function review(
-  app: INestApplication,
-  carId: string,
-  body: Record<string, unknown>,
-  role = 'editor',
-  user = '唐轩',
-) {
-  return request(app.getHttpServer())
-    .post(`/api/v1/admin/cars/${carId}/review`)
-    .set('x-admin-role', role)
-    .set('x-admin-user', encodeURIComponent(user))
-    .send(body);
-}
+import { adminApi, loginToken, type AdminAccountKey } from './support/auth.js';
 
 describe('content review API（US-ADM-02）', () => {
   let app: INestApplication;
+  let token: string;
+  const tokens: Record<AdminAccountKey, string> = { editor: '', reviewer: '', superAdmin: '' };
+
+  function review(
+    carId: string,
+    body: Record<string, unknown>,
+    account: AdminAccountKey = 'editor',
+  ) {
+    return adminApi(app, tokens[account]).post(`/api/v1/admin/cars/${carId}/review`).send(body);
+  }
 
   beforeAll(async () => {
     app = await createApplication();
     await app.init();
+    tokens.editor = await loginToken(app, 'editor');
+    tokens.reviewer = await loginToken(app, 'reviewer');
+    tokens.superAdmin = await loginToken(app, 'superAdmin');
+    token = tokens.superAdmin;
   });
 
   beforeEach(() => {
@@ -37,7 +38,7 @@ describe('content review API（US-ADM-02）', () => {
   afterAll(async () => app.close());
 
   it('editor submits an offline car into the pending queue', async () => {
-    const response = await review(app, 'ty-legacy-001', {
+    const response = await review('ty-legacy-001', {
       action: CarReviewAction.SUBMIT,
     }).expect(201);
 
@@ -46,10 +47,10 @@ describe('content review API（US-ADM-02）', () => {
       action: CarReviewAction.SUBMIT,
       fromStatus: PublishStatus.OFFLINE,
       toStatus: PublishStatus.PENDING_REVIEW,
-      actor: '唐轩',
+      actor: 'editor',
     });
 
-    const queue = await request(app.getHttpServer())
+    const queue = await adminApi(app, token)
       .get('/api/v1/admin/cars/review/pending')
       .expect(200);
     expect(queue.body.data.map((car: { id: string }) => car.id)).toEqual(['ty-legacy-001']);
@@ -60,32 +61,30 @@ describe('content review API（US-ADM-02）', () => {
   });
 
   it('rejects duplicate submissions and published cars', async () => {
-    await review(app, 'ty-legacy-001', { action: CarReviewAction.SUBMIT }).expect(201);
+    await review('ty-legacy-001', { action: CarReviewAction.SUBMIT }).expect(201);
 
-    const duplicate = await review(app, 'ty-legacy-001', {
+    const duplicate = await review('ty-legacy-001', {
       action: CarReviewAction.SUBMIT,
     }).expect(409);
     expect(duplicate.body.error.code).toBe('CAR_ALREADY_IN_REVIEW');
 
-    const published = await review(app, 'ty-suv-001', {
+    const published = await review('ty-suv-001', {
       action: CarReviewAction.SUBMIT,
     }).expect(409);
     expect(published.body.error.code).toBe('CAR_ALREADY_PUBLISHED');
   });
 
   it('reviewer approves a pending car and publishes it to the public list', async () => {
-    await review(app, 'ty-legacy-001', { action: CarReviewAction.SUBMIT }).expect(201);
+    await review('ty-legacy-001', { action: CarReviewAction.SUBMIT }).expect(201);
 
     const approved = await review(
-      app,
       'ty-legacy-001',
       { action: CarReviewAction.APPROVE, comment: '参数与配置核对无误' },
       'reviewer',
-      '审核员',
     ).expect(201);
 
     expect(approved.body.data.car.publishStatus).toBe(PublishStatus.PUBLISHED);
-    expect(approved.body.data.log.actor).toBe('审核员');
+    expect(approved.body.data.log.actor).toBe('reviewer');
 
     const publicList = await request(app.getHttpServer()).get('/api/v1/cars').expect(200);
     expect(
@@ -97,10 +96,9 @@ describe('content review API（US-ADM-02）', () => {
   });
 
   it('rejects without a comment', async () => {
-    await review(app, 'ty-legacy-001', { action: CarReviewAction.SUBMIT }).expect(201);
+    await review('ty-legacy-001', { action: CarReviewAction.SUBMIT }).expect(201);
 
     const response = await review(
-      app,
       'ty-legacy-001',
       { action: CarReviewAction.REJECT },
       'reviewer',
@@ -110,10 +108,9 @@ describe('content review API（US-ADM-02）', () => {
   });
 
   it('reject sends the car back to draft and keeps the comment', async () => {
-    await review(app, 'ty-legacy-001', { action: CarReviewAction.SUBMIT }).expect(201);
+    await review('ty-legacy-001', { action: CarReviewAction.SUBMIT }).expect(201);
 
     const rejected = await review(
-      app,
       'ty-legacy-001',
       { action: CarReviewAction.REJECT, comment: '缺少续航参数' },
       'reviewer',
@@ -122,7 +119,7 @@ describe('content review API（US-ADM-02）', () => {
     expect(rejected.body.data.car.publishStatus).toBe(PublishStatus.DRAFT);
     expect(rejected.body.data.log.comment).toBe('缺少续航参数');
 
-    const logs = await request(app.getHttpServer())
+    const logs = await adminApi(app, token)
       .get('/api/v1/admin/cars/ty-legacy-001/review-logs')
       .expect(200);
     expect(logs.body.data.map((log: { action: string }) => log.action)).toEqual([
@@ -131,11 +128,10 @@ describe('content review API（US-ADM-02）', () => {
     ]);
   });
 
-  it('enforces the reviewer permission and requires a role header', async () => {
-    await review(app, 'ty-legacy-001', { action: CarReviewAction.SUBMIT }).expect(201);
+  it('enforces the reviewer permission and requires login', async () => {
+    await review('ty-legacy-001', { action: CarReviewAction.SUBMIT }).expect(201);
 
     const forbidden = await review(
-      app,
       'ty-legacy-001',
       { action: CarReviewAction.APPROVE },
       'editor',
@@ -145,13 +141,12 @@ describe('content review API（US-ADM-02）', () => {
     const missing = await request(app.getHttpServer())
       .post('/api/v1/admin/cars/ty-legacy-001/review')
       .send({ action: CarReviewAction.APPROVE })
-      .expect(400);
-    expect(missing.body.error.code).toBe('ROLE_REQUIRED');
+      .expect(401);
+    expect(missing.body.error.code).toBe('AUTH_TOKEN_REQUIRED');
   });
 
   it('rejects approval when the car is not pending', async () => {
     const response = await review(
-      app,
       'ty-suv-001',
       { action: CarReviewAction.APPROVE },
       'reviewer',
@@ -160,21 +155,21 @@ describe('content review API（US-ADM-02）', () => {
   });
 
   it('404s for unknown cars in queue actions and logs', async () => {
-    const missingReview = await review(app, 'not-found', {
+    const missingReview = await review('not-found', {
       action: CarReviewAction.SUBMIT,
     }).expect(404);
     expect(missingReview.body.error.code).toBe('CAR_NOT_FOUND');
 
-    const missingLogs = await request(app.getHttpServer())
+    const missingLogs = await adminApi(app, token)
       .get('/api/v1/admin/cars/not-found/review-logs')
       .expect(404);
     expect(missingLogs.body.error.code).toBe('CAR_NOT_FOUND');
   });
 
   it('blocks editors from publishing through the car form, but allows editing published cars', async () => {
-    const createPublished = await request(app.getHttpServer())
+    const editorToken = await loginToken(app, 'editor');
+    const createPublished = await adminApi(app, editorToken)
       .post('/api/v1/admin/cars')
-      .set('x-admin-role', 'editor')
       .send({
         name: '途越越界',
         series: '越界系列',
@@ -188,12 +183,11 @@ describe('content review API（US-ADM-02）', () => {
       .expect(403);
     expect(createPublished.body.error.code).toBe('FORBIDDEN_ROLE');
 
-    const publishedCar = await request(app.getHttpServer())
+    const publishedCar = await adminApi(app, token)
       .get('/api/v1/admin/cars/ty-suv-001')
       .expect(200);
-    const keepPublished = await request(app.getHttpServer())
+    const keepPublished = await adminApi(app, editorToken)
       .put('/api/v1/admin/cars/ty-suv-001')
-      .set('x-admin-role', 'editor')
       .send({
         name: '途越远行',
         series: publishedCar.body.data.series,
