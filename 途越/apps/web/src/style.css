@@ -1,64 +1,160 @@
+/**
+ * 官网全局样式与设计变量（US-SYS-03）。
+ *
+ * 只在这里定义「跨页面共享」的东西：色板、间距、圆角、阴影、容器宽度和断点约定。
+ * 页面与组件自己的版式写在各自的 scoped <style> 里，避免一个全局选择器改坏另一条责任线的页面。
+ */
+
 :root {
-  font-family: Inter, 'Microsoft YaHei', sans-serif;
-  color: #17202a;
-  background: #f4f6f8;
+  /* 品牌色：主色沿用工程基线里的蓝，强调色与对比栏的薄荷绿保持一致 */
+  --color-ink: #17202a;
+  --color-ink-soft: #3d4a58;
+  --color-ink-muted: #586474;
+  --color-brand: #2457a7;
+  --color-brand-strong: #1b4784;
+  --color-brand-soft: #e8eefa;
+  --color-accent: #59d3c4;
+  --color-danger: #b42318;
+
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f4f6f8;
+  --color-surface-muted: #eef2f7;
+  --color-line: #dde2e7;
+  --color-line-soft: #eef1f5;
+
+  /* 间距与圆角：统一走 4px 栅格，避免各页面 18px/20px 混用 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgb(23 32 42 / 6%);
+  --shadow-md: 0 8px 24px rgb(23 32 42 / 8%);
+  --shadow-lg: 0 18px 40px rgb(23 32 42 / 12%);
+
+  --container-max: 1120px;
+  --container-gutter: 24px;
+  --header-height: 64px;
+
+  /* 断点约定（CSS 变量不能用于媒体查询，这里只是声明，实际值写在 media 里）：
+     桌面 ≥ 1024px / 平板 641–1023px / 手机 ≤ 640px */
+  font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: var(--color-ink);
+  background: var(--color-surface-sunken);
+  -webkit-text-size-adjust: 100%;
 }
+
 * {
   box-sizing: border-box;
 }
+
 body {
   margin: 0;
+  min-height: 100vh;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
-header {
-  display: flex;
-  justify-content: space-between;
-  padding: 20px 6vw;
-  background: #fff;
-  border-bottom: 1px solid #dde2e7;
-}
-nav {
-  display: flex;
-  gap: 20px;
-}
+
 a {
-  color: #2457a7;
+  color: var(--color-brand);
   text-decoration: none;
 }
-.brand {
-  font-weight: 700;
-  color: #111;
+
+a:hover {
+  color: var(--color-brand-strong);
 }
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+  color: var(--color-ink);
+}
+
+h1 {
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  margin: var(--space-2) 0 var(--space-5);
+}
+
+img {
+  max-width: 100%;
+}
+
+/* 焦点可见：键盘用户能看清焦点落在哪个链接或按钮上 */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
 main {
-  max-width: 1100px;
+  max-width: var(--container-max);
   margin: 0 auto;
   /* 底部留出悬浮对比栏的高度，避免最后一屏内容被遮住 */
-  padding: 64px 24px 140px;
+  padding: var(--space-7) var(--container-gutter) 140px;
 }
-h1 {
-  font-size: clamp(2rem, 5vw, 4rem);
-  margin: 8px 0 24px;
-}
+
 .eyebrow {
   letter-spacing: 0.2em;
-  color: #586474;
+  color: var(--color-ink-muted);
 }
+
 .status {
   display: inline-block;
-  margin-top: 24px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: #e7edf5;
+  margin-top: var(--space-5);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
 }
+
 .status[data-status='ok'] {
   background: #dff4e5;
 }
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 18px;
+  gap: var(--space-4);
 }
-article {
-  background: white;
-  padding: 20px;
-  border-radius: 10px;
+
+/* 仅对屏幕阅读器可见 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --container-gutter: 20px;
+  }
+
+  main {
+    padding-top: var(--space-6);
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --container-gutter: 16px;
+    --header-height: 56px;
+  }
+
+  main {
+    /* 手机上悬浮对比栏会换行变高，底部留白跟着加大 */
+    padding-bottom: 180px;
+  }
 }
