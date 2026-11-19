@@ -20,31 +20,34 @@ export const router = createRouter({
       component: CmsLayout,
       meta: { requiresAuth: true, roles: allRoles },
       children: [
-        { path: 'dashboard', component: DashboardPage },
-        { path: 'cars', component: CarsPage },
+        // meta.title 同时被面包屑和页面标题使用（US-SYS-03），新增页面补一个标题即可
+        { path: 'dashboard', component: DashboardPage, meta: { title: '数据看板' } },
+        { path: 'cars', component: CarsPage, meta: { title: '车型管理' } },
         // US-CAR-13：车型上下架独立成页，与 US-CAR-10 的车型编辑分开
-        { path: 'cars/publish', component: CarPublishPage },
+        { path: 'cars/publish', component: CarPublishPage, meta: { title: '车型上下架' } },
         // US-ADM-02：内容审核只对审核和超管开放
         {
           path: 'reviews',
           component: ReviewPage,
-          meta: { roles: [AdminRole.REVIEWER, AdminRole.SUPER_ADMIN] },
+          meta: { title: '内容审核', roles: [AdminRole.REVIEWER, AdminRole.SUPER_ADMIN] },
         },
         {
           path: 'activities',
           component: ModulePage,
           props: { title: '活动管理', owner: '运营责任线' },
+          meta: { title: '活动管理' },
         },
         {
           path: 'dealers',
           component: ModulePage,
           props: { title: '经销商管理', owner: '运营责任线' },
+          meta: { title: '经销商管理' },
         },
         {
           path: 'admins',
           component: ModulePage,
           props: { title: '管理员', owner: '权限责任线' },
-          meta: { roles: [AdminRole.SUPER_ADMIN] },
+          meta: { title: '管理员', roles: [AdminRole.SUPER_ADMIN] },
         },
       ],
     },
