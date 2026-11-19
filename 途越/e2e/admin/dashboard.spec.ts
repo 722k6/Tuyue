@@ -40,13 +40,21 @@ test.describe('CMS 数据看板', () => {
   });
 
   test('KPI 数值与 /v1/analytics/dashboard 返回一致', async ({ page }) => {
-    const responsePromise = page.waitForResponse(
-      (response) => response.url().includes('/v1/analytics/dashboard') && response.ok(),
-    );
+    // 登录成功后会先跳一次 /dashboard，看板这时已经请求过接口；测试里再 goto 一次，
+    // 浏览器会把上一份响应体丢掉，`response.json()` 就会报
+    // "Response body is not available for a response that was navigated away from"。
+    // 所以在拦截层把 JSON 读出来，不依赖某一次具体响应的生命周期。
+    const captured: { body: DashboardPayload | null } = { body: null };
+    await page.route('**/v1/analytics/dashboard**', async (route) => {
+      const response = await route.fetch();
+      captured.body = (await response.json()) as DashboardPayload;
+      await route.fulfill({ response });
+    });
 
     await page.goto('/dashboard');
+    await expect.poll(() => captured.body).not.toBeNull();
 
-    const body = (await (await responsePromise).json()) as DashboardPayload;
+    const body = captured.body!;
     expect(body.success).toBe(true);
 
     const totalVisits = page.locator('.kpi-card').first().locator('.kpi-card__value');

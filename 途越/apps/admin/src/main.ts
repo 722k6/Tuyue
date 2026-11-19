@@ -1,6 +1,8 @@
 import {
   ElAlert,
   ElAside,
+  ElBreadcrumb,
+  ElBreadcrumbItem,
   ElButton,
   ElCard,
   ElConfigProvider,
@@ -35,10 +37,12 @@ import App from './App.vue';
 import { router } from './router';
 import './style.css';
 
-const app = createApp(App).use(createPinia()).use(router).use(ElLoading);
-[
+/** 按需注册的全局组件清单：只保留一份，避免组件加进来了却忘了注册。 */
+const globalComponents = [
   ElAlert,
   ElAside,
+  ElBreadcrumb,
+  ElBreadcrumbItem,
   ElButton,
   ElCard,
   ElConfigProvider,
@@ -64,5 +68,8 @@ const app = createApp(App).use(createPinia()).use(router).use(ElLoading);
   ElTabs,
   ElTag,
   ElUpload,
-].forEach((component) => app.component(component.name!, component));
+];
+
+const app = createApp(App).use(createPinia()).use(router).use(ElLoading);
+globalComponents.forEach((component) => app.component(component.name!, component));
 app.mount('#app');

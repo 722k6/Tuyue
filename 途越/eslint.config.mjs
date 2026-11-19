@@ -18,6 +18,7 @@ export default tseslint.config(
         URL: 'readonly',
         HTMLElement: 'readonly',
         HTMLImageElement: 'readonly',
+        HTMLSelectElement: 'readonly',
         File: 'readonly',
         Event: 'readonly',
         FormData: 'readonly',
