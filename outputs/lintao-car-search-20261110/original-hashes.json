@@ -1,0 +1,50 @@
+[
+  {
+    "path": "packages\\contracts\\src\\index.ts",
+    "sha256": "7616B8881C008380CFFEC5F207A2CE3F7B1EE87E2EFCA22EC62247F6DE5A84C4"
+  },
+  {
+    "path": "packages\\contracts\\test\\contracts.spec.ts",
+    "sha256": "39413FA43475550EC8712E3D80C2A08365D6B1CCFFEB18E4CBF8FAD8226682E1"
+  },
+  {
+    "path": "packages\\test-utils\\src\\index.ts",
+    "sha256": "C1CB1C33FC6CF0F281EFCC8D53F09CCAC1E582D63E0F0CAE84DB22D9E34A3746"
+  },
+  {
+    "path": "packages\\test-utils\\test\\mock-data.spec.ts",
+    "sha256": "1B72C4FE2F8D33E0F73B883DB521CC84BE181179ADA44C9F49A54E0CEAE5EC64"
+  },
+  {
+    "path": "apps\\api\\src\\controllers.ts",
+    "sha256": "BED6421689CE77FEF30D1E7722F5617119A96FA0EA7B207392D3A38AB43FD2EC"
+  },
+  {
+    "path": "apps\\api\\test\\api.spec.ts",
+    "sha256": "2BF1E74DC5B72C53957FE3F7F61BE8AE06DBCF517F2C9F1D993B3E66CBC2D2EF"
+  },
+  {
+    "path": "apps\\api\\test\\api.e2e-spec.ts",
+    "sha256": "B7A5F3A775A6BE50F5463C58BE4EDF51BF323D3219ADDA3231A40942AA49AA07"
+  },
+  {
+    "path": "apps\\web\\src\\api.ts",
+    "sha256": "9181B9970E13D774C5E294F8A8749CEA283B4FCA58CFB112990F6628B3C81B92"
+  },
+  {
+    "path": "apps\\web\\src\\pages\\CarsPage.vue",
+    "sha256": "91C1A0DD436888AACD9BECB04BDABD9802C7FDF01B59A8BA7A49D66EB1BEB782"
+  },
+  {
+    "path": "apps\\web\\src\\style.css",
+    "sha256": "53C0132F0D7818BCFBE12356D477D0BCCEB7C3D53A227859ABEFA6C0802B8552"
+  },
+  {
+    "path": "docs\\api\\foundation-contracts.md",
+    "sha256": "DDF6F1518479D7E995C5D1C097991881AA8E9CE80162439713452077920589C3"
+  },
+  {
+    "path": "README.md",
+    "sha256": "CA70C63776C876229938DEDB0F7540675EC178E87FD207FDCD63C3B3890BB7DD"
+  }
+]
