@@ -4,15 +4,18 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApplication } from '../src/app.js';
 import { carRepository } from '../src/car-repository.js';
 import { compareService } from '../src/compare-service.js';
+import { adminApi, loginToken } from './support/auth.js';
 
 const VISITOR = 'visitor-test-001';
 
 describe('US-CMP-01 加入对比与对比栏', () => {
   let app: INestApplication;
+  let token: string;
 
   beforeAll(async () => {
     app = await createApplication();
     await app.init();
+    token = await loginToken(app, 'superAdmin');
   });
 
   afterAll(async () => app.close());
@@ -68,7 +71,7 @@ describe('US-CMP-01 加入对比与对比栏', () => {
       .send({ carId: 'ty-suv-001' })
       .expect(201);
 
-    await request(app.getHttpServer())
+    await adminApi(app, token)
       .post('/api/v1/admin/cars/ty-suv-001/status')
       .send({ action: 'offline', reason: '测试联动' })
       .expect(201);
@@ -89,7 +92,7 @@ describe('US-CMP-01 加入对比与对比栏', () => {
     }
 
     // 再上架一台，凑够 5 台可对比车型，才能真正触发上限
-    await request(app.getHttpServer())
+    await adminApi(app, token)
       .post('/api/v1/admin/cars/ty-legacy-001/status')
       .send({ action: 'publish' })
       .expect(201);
