@@ -48,3 +48,20 @@
 ## 复测约定
 
 修复合并后由李昱彤复测 TC-13：`action=publish` 应返回 400 `INVALID_REVIEW_ACTION`。通过后将 `测试用例及跟踪-李昱彤.xlsx` 对应结果改为「通过」并清空 BugID，在本文件回填修复版本与验证结果。
+
+## 修复记录
+
+| 字段     | 内容                                                                 |
+| -------- | -------------------------------------------------------------------- |
+| 修复版本 | 分支 `fix/adm02-review-defects`（待评审合并入 main）                  |
+| 修复人   | 李昱彤（交叉修复，US-ADM-02 开发负责人唐轩评审）                      |
+| 修复文件 | `apps/api/src/car-review.controller.ts`                              |
+| 回归用例 | `apps/api/test/car-review.spec.ts`                                   |
+
+修复内容：`review()` 在 `assertAdminPermission` 之前先判定 `action` 是否属于 `submit / approve / reject`，非法值直接抛 400 `INVALID_REVIEW_ACTION`，校验顺序改为「动作合法 → 角色权限 → 状态机前置条件」。
+
+| 字段     | 内容                                                                 |
+| -------- | -------------------------------------------------------------------- |
+| 验证结果 | **已修复（2026-11-24，李昱彤自测）**。editor 与 reviewer 分别发送 `action=publish`、`action=unknown-action`，均返回 400 `INVALID_REVIEW_ACTION`，不再误报 403。`apps/api/test/car-review.spec.ts` 16 passed。 |
+
+复测路径：用 editor 调用 `POST /api/v1/admin/cars/:id/review`，请求体 `{"action":"publish"}`，应返回 400 `INVALID_REVIEW_ACTION`。
