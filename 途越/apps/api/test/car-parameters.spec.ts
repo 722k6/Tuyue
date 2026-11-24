@@ -1,11 +1,11 @@
 import type { INestApplication } from '@nestjs/common';
 import { CarParameterGroup } from '@tuyue/contracts';
 import { mockCars } from '@tuyue/test-utils';
-import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApplication } from '../src/app.js';
 import { carRepository } from '../src/car-repository.js';
 import { CarStore } from '../src/cars/car-store.js';
+import { adminApi, loginToken } from './support/auth.js';
 
 const parameters = [
   {
@@ -26,10 +26,12 @@ const parameters = [
 
 describe('admin car parameters API', () => {
   let app: INestApplication;
+  let token: string;
 
   beforeAll(async () => {
     app = await createApplication();
     await app.init();
+    token = await loginToken(app, 'superAdmin');
   });
 
   beforeEach(() => {
@@ -40,7 +42,7 @@ describe('admin car parameters API', () => {
   afterAll(async () => app.close());
 
   it('overwrites parameters and returns the updated detail', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await adminApi(app, token)
       .put('/api/v1/admin/cars/ty-suv-001/parameters')
       .send({ parameters })
       .expect(200);
@@ -50,7 +52,7 @@ describe('admin car parameters API', () => {
   });
 
   it('syncs saved parameters to the repository used by the public site', async () => {
-    await request(app.getHttpServer())
+    await adminApi(app, token)
       .put('/api/v1/admin/cars/ty-suv-001/parameters')
       .send({ parameters })
       .expect(200);
@@ -59,7 +61,7 @@ describe('admin car parameters API', () => {
   });
 
   it('fills the other group when the client omits it', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await adminApi(app, token)
       .put('/api/v1/admin/cars/ty-suv-001/parameters')
       .send({ parameters: [{ code: 'warranty', label: '质保', value: '5 年' }] })
       .expect(200);
@@ -70,7 +72,7 @@ describe('admin car parameters API', () => {
   });
 
   it('rejects duplicate codes with field-level details', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await adminApi(app, token)
       .put('/api/v1/admin/cars/ty-suv-001/parameters')
       .send({
         parameters: [
@@ -87,7 +89,7 @@ describe('admin car parameters API', () => {
   });
 
   it('rejects a malformed payload', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await adminApi(app, token)
       .put('/api/v1/admin/cars/ty-suv-001/parameters')
       .send({})
       .expect(400);
@@ -97,7 +99,7 @@ describe('admin car parameters API', () => {
   });
 
   it('404s for an unknown car', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await adminApi(app, token)
       .put('/api/v1/admin/cars/not-found/parameters')
       .send({ parameters })
       .expect(404);

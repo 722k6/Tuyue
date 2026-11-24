@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { loginAs } from '../support/admin-session';
+import { loginAs, loginToken } from '../support/admin-session';
 import { waitForApiReady } from '../support/wait-for-api';
 
 const API_BASE = 'http://127.0.0.1:3000/api';
@@ -20,7 +20,9 @@ test.describe('CMS 车型上下架', () => {
     // US-SYS-02 起后台路由需要登录态
     await loginAs(page);
     // 前置：确保被测车型处于已下线状态（上一次失败运行可能留下脏状态）
+    const token = await loginToken(request);
     await request.post(`${API_BASE}/v1/admin/cars/ty-legacy-001/status`, {
+      headers: { Authorization: `Bearer ${token}` },
       data: { action: 'offline', reason: '回归前置' },
     });
   });
