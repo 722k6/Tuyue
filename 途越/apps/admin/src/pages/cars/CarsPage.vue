@@ -5,12 +5,17 @@ import {
   CarReviewAction,
   EnergyType,
   PublishStatus,
+  type CarReviewLog,
   type CarSummary,
 } from '@tuyue/contracts';
 import { computed, onMounted, ref } from 'vue';
 import { ApiRequestError, carsApi, resolveAssetUrl } from '../../api';
 import { getAdminRole } from '../../features/admin-session';
-import { CarReviewApiError, submitReview } from '../../features/car-review/car-review.api';
+import {
+  CarReviewApiError,
+  fetchReviewLogs,
+  submitReview,
+} from '../../features/car-review/car-review.api';
 import CarFormDialog from './CarFormDialog.vue';
 import CarImagesDrawer from './CarImagesDrawer.vue';
 import CarParametersDrawer from './CarParametersDrawer.vue';
@@ -45,6 +50,18 @@ const parametersVisible = ref(false);
 const parametersCar = ref<CarSummary | null>(null);
 const submittingId = ref<string | null>(null);
 
+// BUG-ADM02-04：编辑需要看到驳回意见，才能知道「为什么被退回、改哪里」。
+const logsVisible = ref(false);
+const logsLoading = ref(false);
+const logsCar = ref<CarSummary | null>(null);
+const reviewLogs = ref<CarReviewLog[]>([]);
+
+const REVIEW_ACTION_LABEL: Record<string, string> = {
+  [CarReviewAction.SUBMIT]: '提交审核',
+  [CarReviewAction.APPROVE]: '审核通过',
+  [CarReviewAction.REJECT]: '审核驳回',
+};
+
 const role = getAdminRole();
 const canSubmitReview = role === AdminRole.EDITOR || role === AdminRole.SUPER_ADMIN;
 
@@ -68,6 +85,13 @@ function formatWan(cents: number): string {
 
 function formatPriceRange(minCents: number, maxCents: number): string {
   return `${formatWan(minCents)}-${formatWan(maxCents)} 万`;
+}
+
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 async function load(): Promise<void> {
@@ -124,6 +148,27 @@ function openParameters(row: CarSummary): void {
   parametersCar.value = row;
   parametersVisible.value = true;
 }
+
+async function openLogs(row: CarSummary): Promise<void> {
+  logsCar.value = row;
+  reviewLogs.value = [];
+  logsVisible.value = true;
+  logsLoading.value = true;
+  try {
+    reviewLogs.value = await fetchReviewLogs(row.id);
+  } catch (error) {
+    ElMessage.error(
+      error instanceof CarReviewApiError ? error.message : '审核记录加载失败，请稍后重试',
+    );
+  } finally {
+    logsLoading.value = false;
+  }
+}
+
+/** 最近一次驳回意见：抽屉顶部与状态列提示共用。 */
+const latestReject = computed<CarReviewLog | null>(() => {
+  return reviewLogs.value.find((log) => log.action === CarReviewAction.REJECT) ?? null;
+});
 
 function canSubmitForReview(row: CarSummary): boolean {
   return (
@@ -244,7 +289,7 @@ onMounted(load);
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="300" fixed="right">
+      <el-table-column label="操作" width="380" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="canSubmitForReview(row)"
@@ -255,6 +300,7 @@ onMounted(load);
           >
             提交审核
           </el-button>
+          <el-button link type="primary" @click="openLogs(row)">审核记录</el-button>
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
           <el-button link type="primary" @click="openParameters(row)">参数</el-button>
           <el-button link type="primary" @click="openImages(row)">图片</el-button>
@@ -291,6 +337,39 @@ onMounted(load);
       :car-name="parametersCar?.name ?? ''"
       @saved="load"
     />
+
+    <el-drawer
+      v-model="logsVisible"
+      :title="`审核记录 · ${logsCar?.name ?? ''}`"
+      size="520px"
+      destroy-on-close
+    >
+      <el-alert
+        v-if="latestReject"
+        class="reject-alert"
+        type="error"
+        :closable="false"
+        show-icon
+        title="最近一次被驳回"
+        :description="latestReject.comment || '审核员未填写驳回原因'"
+      />
+      <el-skeleton v-if="logsLoading" :rows="4" animated />
+      <el-empty v-else-if="reviewLogs.length === 0" description="该车型还没有审核记录" />
+      <el-table v-else :data="reviewLogs" size="small" border style="width: 100%">
+        <el-table-column label="时间" width="150">
+          <template #default="{ row }">{{ formatDateTime(row.occurredAt) }}</template>
+        </el-table-column>
+        <el-table-column label="动作" width="92">
+          <template #default="{ row }">{{ REVIEW_ACTION_LABEL[row.action] ?? row.action }}</template>
+        </el-table-column>
+        <el-table-column label="操作人" width="96">
+          <template #default="{ row }">{{ row.actor }}</template>
+        </el-table-column>
+        <el-table-column label="意见" min-width="140">
+          <template #default="{ row }">{{ row.comment || '—' }}</template>
+        </el-table-column>
+      </el-table>
+    </el-drawer>
   </section>
 </template>
 
@@ -349,5 +428,8 @@ onMounted(load);
 .pager {
   display: flex;
   justify-content: flex-end;
+}
+.reject-alert {
+  margin-bottom: 12px;
 }
 </style>

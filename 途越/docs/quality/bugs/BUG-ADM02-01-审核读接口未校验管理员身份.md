@@ -49,3 +49,20 @@
 ## 复测约定
 
 修复合并后由李昱彤复测 TC-17、TC-18，将 `测试用例及跟踪-李昱彤.xlsx`「车型管理」sheet 对应用例结果改为「通过」并清空 BugID，同时在本文件回填修复版本与验证结果。
+
+## 修复记录
+
+| 字段     | 内容                                                                 |
+| -------- | -------------------------------------------------------------------- |
+| 修复版本 | 分支 `fix/adm02-review-defects`（待评审合并入 main）                  |
+| 修复人   | 李昱彤（交叉修复，US-ADM-02 开发负责人唐轩评审）                      |
+| 修复文件 | `apps/api/src/car-review.controller.ts`、`apps/api/src/admin-access.ts` |
+| 回归用例 | `apps/api/test/car-review.spec.ts`、`e2e/admin/car-review-logs.spec.ts` |
+
+修复内容：`listPending()` 补 `content:review` 权限校验；`listReviewLogs()` 补 `content:edit` / `content:review` 任一权限校验（编辑需要读驳回意见，见 BUG-ADM02-04）；`assertAdminPermission()` 改为只接受 `AdminAuthGuard` 从 JWT 解析出的角色，删除对 `x-admin-role` 请求头的读取。
+
+| 字段     | 内容                                                                 |
+| -------- | -------------------------------------------------------------------- |
+| 验证结果 | **已修复（2026-11-24，李昱彤自测）**。未登录读待审队列与留痕均返回 401 `AUTH_TOKEN_REQUIRED`；editor 读待审队列返回 403 `FORBIDDEN_ROLE`；editor 读留痕返回 200（为满足 TC-16 展示驳回意见）。`apps/api/test/car-review.spec.ts` 16 passed。 |
+
+复测路径：不登录直接请求 `GET /api/v1/admin/cars/review/pending`，应返回 401；用 editor 账号登录后同请求应返回 403。

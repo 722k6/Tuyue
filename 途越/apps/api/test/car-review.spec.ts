@@ -202,3 +202,79 @@ describe('content review API（US-ADM-02）', () => {
     expect(keepPublished.body.data.publishStatus).toBe(PublishStatus.PUBLISHED);
   });
 });
+
+describe('content review 鉴权与留痕（BUG-ADM02-01 / 02 / 03）', () => {
+  let app: INestApplication;
+  const tokens: Record<AdminAccountKey, string> = { editor: '', reviewer: '', superAdmin: '' };
+
+  beforeAll(async () => {
+    app = await createApplication();
+    await app.init();
+    tokens.editor = await loginToken(app, 'editor');
+    tokens.reviewer = await loginToken(app, 'reviewer');
+    tokens.superAdmin = await loginToken(app, 'superAdmin');
+  });
+
+  beforeEach(() => {
+    app.get(CarStore).reset();
+    carRepository.reset(mockCars);
+  });
+
+  afterAll(async () => app.close());
+
+  it('BUG-ADM02-01：editor 无审核权限，读取待审队列返回 403', async () => {
+    const forbidden = await adminApi(app, tokens.editor)
+      .get('/api/v1/admin/cars/review/pending')
+      .expect(403);
+    expect(forbidden.body.error.code).toBe('FORBIDDEN_ROLE');
+  });
+
+  it('BUG-ADM02-01：未登录读取审核留痕返回 401', async () => {
+    const missing = await request(app.getHttpServer())
+      .get('/api/v1/admin/cars/ty-legacy-001/review-logs')
+      .expect(401);
+    expect(missing.body.error.code).toBe('AUTH_TOKEN_REQUIRED');
+  });
+
+  it('BUG-ADM02-04：editor 具备 content:edit，可读留痕以查看驳回意见', async () => {
+    const logs = await adminApi(app, tokens.editor)
+      .get('/api/v1/admin/cars/ty-legacy-001/review-logs')
+      .expect(200);
+    expect(Array.isArray(logs.body.data)).toBe(true);
+  });
+
+  it('BUG-ADM02-01：未登录读取待审队列返回 401', async () => {
+    const missing = await request(app.getHttpServer())
+      .get('/api/v1/admin/cars/review/pending')
+      .expect(401);
+    expect(missing.body.error.code).toBe('AUTH_TOKEN_REQUIRED');
+  });
+
+  it('BUG-ADM02-02：请求体 actor 被忽略，留痕操作人取服务端登录态', async () => {
+    await adminApi(app, tokens.editor)
+      .post('/api/v1/admin/cars/ty-legacy-001/review')
+      .send({ action: CarReviewAction.SUBMIT, actor: '李四' })
+      .expect(201);
+
+    const logs = await adminApi(app, tokens.superAdmin)
+      .get('/api/v1/admin/cars/ty-legacy-001/review-logs')
+      .expect(200);
+    expect(logs.body.data[0].actor).toBe('editor');
+  });
+
+  it('BUG-ADM02-03：editor 发送非法动作返回 400 INVALID_REVIEW_ACTION，而非 403', async () => {
+    const response = await adminApi(app, tokens.editor)
+      .post('/api/v1/admin/cars/ty-legacy-001/review')
+      .send({ action: 'publish' })
+      .expect(400);
+    expect(response.body.error.code).toBe('INVALID_REVIEW_ACTION');
+  });
+
+  it('BUG-ADM02-03：reviewer 发送非法动作同样返回 400 INVALID_REVIEW_ACTION', async () => {
+    const response = await adminApi(app, tokens.reviewer)
+      .post('/api/v1/admin/cars/ty-legacy-001/review')
+      .send({ action: 'unknown-action' })
+      .expect(400);
+    expect(response.body.error.code).toBe('INVALID_REVIEW_ACTION');
+  });
+});

@@ -48,3 +48,20 @@
 ## 复测约定
 
 修复合并后由李昱彤复测 TC-19：请求体传 `actor` 时应被忽略，留痕操作人与服务端身份一致。通过后将 `测试用例及跟踪-李昱彤.xlsx` 对应结果改为「通过」，并在本文件回填修复版本与验证结果。
+
+## 修复记录
+
+| 字段     | 内容                                                                 |
+| -------- | -------------------------------------------------------------------- |
+| 修复版本 | 分支 `fix/adm02-review-defects`（待评审合并入 main）                  |
+| 修复人   | 李昱彤（交叉修复，US-ADM-02 开发负责人唐轩评审）                      |
+| 修复文件 | `apps/api/src/car-review.controller.ts`                              |
+| 回归用例 | `apps/api/test/car-review.spec.ts`                                   |
+
+修复内容：`review()` 内操作人由 `body?.actor?.trim() || admin.username` 改为固定 `admin.username`，请求体的 `actor` 字段不再参与留痕写入。
+
+| 字段     | 内容                                                                 |
+| -------- | -------------------------------------------------------------------- |
+| 验证结果 | **已修复（2026-11-24，李昱彤自测）**。editor 提交审核时请求体传 `actor: '李四'`，`review-logs` 返回的 `actor` 仍为 `editor`，伪造无效。`apps/api/test/car-review.spec.ts` 16 passed。 |
+
+复测路径：editor 调用 `POST /api/v1/admin/cars/:id/review`，请求体带 `actor: 李四`，再读 `GET /api/v1/admin/cars/:id/review-logs`，`actor` 应为登录账号名。
