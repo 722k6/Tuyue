@@ -1,38 +1,63 @@
+/**
+ * CMS 全局样式变量（US-SYS-03）。
+ *
+ * 与官网共用同一套命名（--color-* / --space-*），只是后台的主色沿用 Element Plus 的蓝。
+ * 组件内部版式写在各自的 scoped 样式里，这里只放跨页面共享的底座。
+ */
 :root {
-  font-family: Inter, 'Microsoft YaHei', sans-serif;
-  color: #1f2937;
-  background: #f5f7fa;
+  --color-ink: #1f2937;
+  --color-ink-muted: #586474;
+  --color-brand: #2457a7;
+  --color-surface: #fff;
+  --color-canvas: #f5f7fa;
+  --color-line: #e5e7eb;
+  --color-line-soft: #eef1f5;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+
+  font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: var(--color-ink);
+  background: var(--color-canvas);
 }
+
 * {
   box-sizing: border-box;
 }
+
 body {
   margin: 0;
 }
+
 .shell {
   min-height: 100vh;
 }
+
 .el-aside {
-  background: #fff;
-  border-right: 1px solid #e5e7eb;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-line);
 }
-.el-aside h2 {
-  padding: 16px 20px;
-}
+
 .el-header {
   display: flex;
   align-items: center;
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-line);
 }
+
 .login {
   min-height: 100vh;
   display: grid;
   place-items: center;
 }
+
 .login .el-card {
   width: min(420px, 90vw);
 }
+
 /*
  * 内容区宽度上限。注意排除 .el-container：Element Plus 的容器渲染成 <section>，
  * 不排除的话整个 CMS 外壳会被压到 960px，后台表格（7 列）直接放不下最后两列。
@@ -40,6 +65,7 @@ body {
 section:not(.el-container) {
   max-width: 960px;
 }
+
 h1 {
   margin-top: 0;
 }

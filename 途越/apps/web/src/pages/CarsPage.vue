@@ -5,21 +5,33 @@ import {
   EnergyType,
   SortDirection,
   type CarCatalogQuery,
-  type CarSummary,
 } from '@tuyue/contracts';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router';
-import { webApi } from '../api';
-import CompareToggle from '../features/compare/CompareToggle.vue';
+import { TrackEventName, track } from '../analytics/track';
+import CarCard from '../components/CarCard.vue';
+import EmptyState from '../components/EmptyState.vue';
+import LoadingSkeleton from '../components/LoadingSkeleton.vue';
+import PagePagination from '../components/PagePagination.vue';
+import {
+  CAR_PAGE_SIZE_OPTIONS,
+  DEFAULT_CAR_PAGE_SIZE,
+  useCarListStore,
+} from '../features/car/car-list.store';
 
-type SortOption = '' | 'price-asc' | 'price-desc' | 'popularity-desc';
-
+/**
+ * 前台车型列表（US-CAR-01 + US-CAR-03 / US-SRC-01）。
+ *
+ * 两条责任线落在同一个页面上，所以数据流只留一个出口：
+ * 筛选 / 搜索条件（keyword、energyType、bodyStyle、价格区间、sort）写进 URL，
+ * 统一由 buildApiQuery() 转成接口参数；分页（page、pageSize）同样在 URL 里，
+ * 但由前端切片——条件变了回第 1 页，只翻页就复用已有结果，不重复打接口。
+ */
 const route = useRoute();
 const router = useRouter();
-const cars = ref<CarSummary[]>([]);
-const loading = ref(false);
-const error = ref('');
-let requestSequence = 0;
+const list = useCarListStore();
+
+type SortOption = '' | 'price-asc' | 'price-desc' | 'popularity-desc';
 
 const filters = reactive({
   keyword: '',
@@ -29,18 +41,6 @@ const filters = reactive({
   maxPriceWan: '',
   sort: '' as SortOption,
 });
-
-const energyLabels: Record<string, string> = {
-  [EnergyType.GASOLINE]: '燃油',
-  [EnergyType.HYBRID]: '混动',
-  [EnergyType.ELECTRIC]: '纯电',
-};
-
-const bodyStyleLabels: Record<string, string> = {
-  [BodyStyle.SUV]: 'SUV',
-  [BodyStyle.SEDAN]: '轿车',
-  [BodyStyle.MPV]: 'MPV',
-};
 
 function queryValue(name: string): string {
   const value = route.query[name];
@@ -67,6 +67,7 @@ function readPriceWan(value: string, label: string): number | undefined {
   return parsed;
 }
 
+/** 地址栏 → 接口参数。筛选条件一律以 URL 为准，刷新、分享、前进后退都还原同一份结果。 */
 function buildApiQuery(): CarCatalogQuery {
   const query: CarCatalogQuery = {};
   const keyword = queryValue('keyword').trim();
@@ -99,23 +100,7 @@ function buildApiQuery(): CarCatalogQuery {
   return query;
 }
 
-async function loadCars(): Promise<void> {
-  const currentRequest = ++requestSequence;
-  loading.value = true;
-  error.value = '';
-  try {
-    const response = await webApi.cars(buildApiQuery());
-    if (currentRequest === requestSequence) cars.value = response.data;
-  } catch (cause) {
-    if (currentRequest === requestSequence) {
-      cars.value = [];
-      error.value = cause instanceof Error ? cause.message : '车型接口暂时不可用';
-    }
-  } finally {
-    if (currentRequest === requestSequence) loading.value = false;
-  }
-}
-
+/** 表单 → 地址栏。不带 page / pageSize，条件一变自然回到第 1 页。 */
 function buildUrlQuery(): LocationQueryRaw {
   const query: LocationQueryRaw = {};
   if (filters.keyword.trim()) query.keyword = filters.keyword.trim();
@@ -127,19 +112,27 @@ function buildUrlQuery(): LocationQueryRaw {
   return query;
 }
 
+/** 只用来判断「筛选条件变没变」，不参与请求。 */
+function filterSignature(): string {
+  return JSON.stringify(buildUrlQuery());
+}
+
+let appliedSignature: string | null = null;
+
+async function reload(): Promise<void> {
+  await list.load(buildApiQuery());
+}
+
 async function applyFilters(): Promise<void> {
-  error.value = '';
   try {
-    const minPriceWan = readPriceWan(filters.minPriceWan, '最低价');
-    const maxPriceWan = readPriceWan(filters.maxPriceWan, '最高价');
-    if (minPriceWan !== undefined && maxPriceWan !== undefined && minPriceWan > maxPriceWan) {
-      throw new Error('最低价不能大于最高价');
-    }
+    // 前端先校验一遍，条件不合法就不发请求，也不把脏参数写进地址栏
+    readPriceWan(filters.minPriceWan, '最低价');
+    readPriceWan(filters.maxPriceWan, '最高价');
     const target = router.resolve({ path: '/cars', query: buildUrlQuery() });
-    if (target.fullPath === route.fullPath) await loadCars();
+    if (target.fullPath === route.fullPath) await reload();
     else await router.push(target);
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : '筛选条件无效';
+    list.fail(cause instanceof Error ? cause.message : '筛选条件无效');
   }
 }
 
@@ -152,37 +145,64 @@ async function resetFilters(): Promise<void> {
     maxPriceWan: '',
     sort: '',
   });
-  if (route.fullPath === '/cars') await loadCars();
+  if (route.fullPath === '/cars') await reload();
   else await router.push('/cars');
 }
 
-function formatPriceRange(car: CarSummary): string {
-  const min = (car.priceMinCents / 1_000_000).toFixed(2).replace(/\.00$/, '');
-  const max = (car.priceMaxCents / 1_000_000).toFixed(2).replace(/\.00$/, '');
-  return `${min}–${max} 万元`;
+/** 页码与每页条数写回地址栏；默认值不落参数，「清空条件」后地址栏才干净。 */
+function syncPaginationToUrl(): void {
+  const query = buildUrlQuery();
+  if (list.page > 1) query.page = String(list.page);
+  if (list.pageSize !== DEFAULT_CAR_PAGE_SIZE) query.pageSize = String(list.pageSize);
+  const target = router.resolve({ path: '/cars', query });
+  if (target.fullPath !== route.fullPath) void router.replace(target);
 }
 
+function changePage(next: number): void {
+  list.setPage(next);
+  syncPaginationToUrl();
+}
+
+function changePageSize(next: number): void {
+  list.setPageSize(next);
+  syncPaginationToUrl();
+}
+
+const hasFilters = computed(() => Object.keys(buildUrlQuery()).length > 0);
+
 const resultSummary = computed(() => {
+  if (list.status !== 'ready') return '';
   const keyword = queryValue('keyword').trim();
-  return keyword
-    ? `“${keyword}”共找到 ${cars.value.length} 款车型`
-    : `共 ${cars.value.length} 款车型`;
+  return keyword ? `“${keyword}”共找到 ${list.total} 款车型` : `共 ${list.total} 款车型`;
 });
 
 watch(
   () => route.fullPath,
-  () => {
+  async () => {
     syncFiltersFromUrl();
-    void loadCars();
+    list.applyQuery({ page: route.query.page, pageSize: route.query.pageSize });
+
+    const signature = filterSignature();
+    // 只是翻页：结果已经在 store 里，不必再打一次接口
+    if (signature === appliedSignature && list.status === 'ready') return;
+    appliedSignature = signature;
+    await reload();
   },
   { immediate: true },
 );
+
+void track(TrackEventName.PAGE_VIEW, { page: 'cars' });
 </script>
 
 <template>
   <section class="cars-page">
-    <p class="eyebrow">FIND YOUR TUYUE</p>
-    <h1>车型筛选与搜索</h1>
+    <header class="cars-page__head">
+      <p class="eyebrow">ALL MODELS</p>
+      <h1>车型列表</h1>
+      <p class="cars-page__lead">
+        浏览途越在售车型，点开任意一台查看完整参数；对照选购时最多可挑 4 台加入对比。
+      </p>
+    </header>
 
     <form class="car-filters" aria-label="车型筛选与搜索" @submit.prevent="applyFilters">
       <label class="filter-keyword">
@@ -236,60 +256,87 @@ watch(
       </div>
     </form>
 
-    <p v-if="error" class="feedback error-message" role="alert">{{ error }}</p>
-    <p v-else-if="loading" class="feedback" aria-live="polite">正在加载车型…</p>
+    <LoadingSkeleton
+      v-if="list.status === 'idle' || list.status === 'loading'"
+      :count="list.pageSize >= 9 ? 6 : 3"
+    />
+
+    <EmptyState
+      v-else-if="list.status === 'error'"
+      tone="error"
+      title="车型加载失败"
+      :description="list.errorMessage"
+      action-label="重新加载"
+      @action="reload"
+    />
+
+    <EmptyState
+      v-else-if="list.total === 0 && !hasFilters"
+      title="暂无在售车型"
+      description="车型资料正在整理中，稍后再来看看，或到品牌活动页了解最新动态。"
+      action-label="刷新列表"
+      @action="reload"
+    />
+
+    <div v-else-if="list.total === 0" class="cars-empty">
+      <h2>没有找到匹配车型</h2>
+      <p>请尝试缩短关键词、放宽价格范围，或清空部分筛选条件。</p>
+      <button class="secondary-button" type="button" @click="resetFilters">查看全部车型</button>
+    </div>
+
     <template v-else>
-      <div class="result-heading">
-        <h2>搜索结果</h2>
-        <p>{{ resultSummary }}</p>
+      <p class="cars-page__summary">{{ resultSummary }}</p>
+
+      <div class="cars-grid">
+        <CarCard v-for="car in list.pagedItems" :key="car.id" :car="car" />
       </div>
-      <div v-if="cars.length" class="grid car-grid">
-        <article v-for="car in cars" :key="car.id" class="car-card">
-          <div class="car-meta">
-            <span>{{ energyLabels[car.energyType] }}</span>
-            <span v-if="car.bodyStyle">{{ bodyStyleLabels[car.bodyStyle] }}</span>
-          </div>
-          <p class="car-series">{{ car.series }}</p>
-          <h2>{{ car.name }}</h2>
-          <p>{{ car.tagline }}</p>
-          <p class="car-price">{{ formatPriceRange(car) }}</p>
-          <div class="card-actions">
-            <RouterLink :to="`/cars/${car.id}`">查看车型详情</RouterLink>
-            <CompareToggle :car="car" />
-          </div>
-        </article>
-      </div>
-      <div v-else class="empty-state">
-        <h2>没有找到匹配车型</h2>
-        <p>请尝试缩短关键词、放宽价格范围，或清空部分筛选条件。</p>
-        <button class="secondary-button" type="button" @click="resetFilters">查看全部车型</button>
-      </div>
+
+      <PagePagination
+        :page="list.page"
+        :page-count="list.pageCount"
+        :total="list.total"
+        :page-size="list.pageSize"
+        :range-start="list.rangeStart"
+        :range-end="list.rangeEnd"
+        :page-size-options="CAR_PAGE_SIZE_OPTIONS"
+        @update:page="changePage"
+        @update:page-size="changePageSize"
+      />
     </template>
   </section>
 </template>
 
 <style scoped>
-button,
-input,
-select {
-  font: inherit;
+.cars-page__head {
+  max-width: 62ch;
+}
+
+.cars-page__lead {
+  margin: 0 0 var(--space-5);
+  color: var(--color-ink-muted);
+}
+
+.cars-page__summary {
+  margin: 0 0 var(--space-3);
+  color: var(--color-ink-muted);
+  font-size: 0.9rem;
 }
 
 .car-filters {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 28px;
-  padding: 24px;
-  border: 1px solid #dbe3ec;
-  border-radius: 14px;
-  background: #fff;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+  padding: var(--space-5);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .car-filters label {
   display: grid;
-  gap: 8px;
-  color: #354252;
+  gap: var(--space-2);
+  color: var(--color-ink-soft);
   font-size: 0.9rem;
   font-weight: 600;
 }
@@ -299,124 +346,87 @@ select {
   width: 100%;
   min-height: 44px;
   padding: 9px 12px;
-  border: 1px solid #bcc9d8;
-  border-radius: 8px;
-  background: #fff;
-  color: #17202a;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
 }
 
 .car-filters input:focus,
 .car-filters select:focus {
   outline: 3px solid rgb(36 87 167 / 18%);
-  border-color: #2457a7;
+  border-color: var(--color-brand);
 }
 
 .filter-keyword {
   grid-column: span 2;
 }
 
-.filter-actions,
-.card-actions {
+.filter-actions {
   display: flex;
-  align-items: center;
+  align-items: end;
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.filter-actions {
-  align-items: end;
-}
-
-.card-actions {
-  margin-top: 10px;
 }
 
 .primary-button,
 .secondary-button {
   min-height: 44px;
   padding: 9px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
 .primary-button {
-  border: 1px solid #2457a7;
-  background: #2457a7;
+  border: 1px solid var(--color-brand);
+  background: var(--color-brand);
   color: #fff;
 }
 
 .secondary-button {
-  border: 1px solid #aebdce;
-  background: #fff;
-  color: #26384b;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink-soft);
 }
 
-.feedback,
-.empty-state {
-  padding: 24px;
-  border-radius: 12px;
-  background: #fff;
-}
-
-.error-message {
-  border: 1px solid #f1b8b8;
-  color: #9b2020;
-  background: #fff3f3;
-}
-
-.result-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 28px 0 16px;
-}
-
-.result-heading h2,
-.result-heading p {
-  margin: 0;
-}
-
-.car-card {
-  border: 1px solid #e0e6ed;
-  box-shadow: 0 8px 24px rgb(29 50 74 / 7%);
-}
-
-.car-card h2 {
-  margin: 8px 0;
-  font-size: 1.5rem;
-}
-
-.car-meta {
-  display: flex;
-  gap: 8px;
-}
-
-.car-meta span {
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #e8f0fa;
-  color: #234f85;
-  font-size: 0.8rem;
-}
-
-.car-series {
-  color: #647386;
-}
-
-.car-price {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #b14b25;
-}
-
-.empty-state {
+.cars-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-7) var(--space-5);
+  border: 1px dashed var(--color-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
   text-align: center;
+}
+
+.cars-empty h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.cars-empty p {
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
+.cars-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+@media (max-width: 1023px) {
+  .cars-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
 }
 
 @media (max-width: 760px) {
   .car-filters {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-4);
   }
 
   .filter-keyword {
@@ -427,10 +437,11 @@ select {
     align-items: stretch;
     flex-direction: column;
   }
+}
 
-  .result-heading {
-    align-items: flex-start;
-    flex-direction: column;
+@media (max-width: 640px) {
+  .cars-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>
