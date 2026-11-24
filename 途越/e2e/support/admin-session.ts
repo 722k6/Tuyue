@@ -1,4 +1,20 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type APIRequestContext, type Page } from '@playwright/test';
+
+const API_BASE = 'http://127.0.0.1:3000/api';
+
+/** 直接调后台接口的用例要先拿 Token（issue #26 起 /api/v1/admin/** 强制鉴权）。 */
+export async function loginToken(
+  request: APIRequestContext,
+  username = 'editor',
+  password = 'Editor@123',
+): Promise<string> {
+  const response = await request.post(`${API_BASE}/v1/auth/login`, {
+    data: { username, password },
+  });
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as { data: { accessToken: string } };
+  return body.data.accessToken;
+}
 
 export async function loginAs(
   page: Page,

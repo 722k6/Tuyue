@@ -4,6 +4,7 @@ import { type NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { parseCorsOrigins } from '@tuyue/config';
 import { AppModule } from './app.module.js';
+import { AdminAuthGuard } from './auth/admin-auth.guard.js';
 import { storageRoot } from './cars/image-storage.js';
 import { SuccessResponseInterceptor, UnifiedExceptionFilter } from './common.js';
 
@@ -14,6 +15,7 @@ export async function createApplication(): Promise<INestApplication> {
   app.useStaticAssets(storageRoot, { prefix: '/static/' });
   app.useGlobalInterceptors(new SuccessResponseInterceptor());
   app.useGlobalFilters(new UnifiedExceptionFilter());
+  app.useGlobalGuards(new AdminAuthGuard());
 
   const openApi = SwaggerModule.createDocument(
     app,

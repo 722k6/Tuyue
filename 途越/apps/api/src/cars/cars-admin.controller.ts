@@ -5,7 +5,6 @@ import {
   Delete,
   ForbiddenException,
   Get,
-  Headers,
   Inject,
   NotFoundException,
   Param,
@@ -29,6 +28,8 @@ import {
   type CarSummary,
   type PaginatedResponse,
 } from '@tuyue/contracts';
+import type { AdminPrincipal } from '../auth/admin-auth.guard.js';
+import { CurrentAdmin } from '../auth/current-admin.js';
 import { carRepository } from '../car-repository.js';
 import { CarStore, type CarListQuery } from './car-store.js';
 import {
@@ -48,12 +49,12 @@ function carNotFound(): NotFoundException {
  * 已发布车型继续编辑内容时不拦截，避免连文案都改不了。超管保留直接发布能力。
  */
 function assertCanPublish(
-  role: string | undefined,
+  role: AdminRole,
   nextStatus: PublishStatus,
   currentStatus?: PublishStatus,
 ): void {
   if (
-    role?.trim() === AdminRole.EDITOR &&
+    role === AdminRole.EDITOR &&
     nextStatus === PublishStatus.PUBLISHED &&
     currentStatus !== PublishStatus.PUBLISHED
   ) {
@@ -95,11 +96,8 @@ export class CarsAdminController {
   }
 
   @Post()
-  createCar(
-    @Body() input: CarDraftInput,
-    @Headers('x-admin-role') role?: string,
-  ): CarDetail {
-    assertCanPublish(role, input.publishStatus);
+  createCar(@Body() input: CarDraftInput, @CurrentAdmin() admin: AdminPrincipal): CarDetail {
+    assertCanPublish(admin.role, input.publishStatus);
     const car = this.store.create(input);
     carRepository.upsert(car);
     return car;
@@ -109,11 +107,11 @@ export class CarsAdminController {
   updateCar(
     @Param('id') id: string,
     @Body() input: CarDraftInput,
-    @Headers('x-admin-role') role?: string,
+    @CurrentAdmin() admin: AdminPrincipal,
   ): CarDetail {
     const current = this.store.find(id);
     if (!current) throw carNotFound();
-    assertCanPublish(role, input.publishStatus, current.publishStatus);
+    assertCanPublish(admin.role, input.publishStatus, current.publishStatus);
     const car = this.store.update(id, input);
     if (!car) throw carNotFound();
     carRepository.upsert(car);
